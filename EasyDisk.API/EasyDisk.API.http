@@ -1,0 +1,6 @@
+@EasyDisk.API_HostAddress = http://localhost:5262
+
+GET {{EasyDisk.API_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
