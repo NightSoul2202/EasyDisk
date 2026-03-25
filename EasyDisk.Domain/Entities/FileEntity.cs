@@ -21,5 +21,7 @@ namespace EasyDisk.Domain.Entities
 
         public FolderEntity? Folder { get; set; }
         public ICollection<ShareLinkEntity> ShareLinks { get; set; } = new List<ShareLinkEntity>();
+        public ICollection<FileVersionEntity> Versions { get; set; } = new List<FileVersionEntity>();
+        public ICollection<TagEntity> Tags { get; set; } = new List<TagEntity>();
     }
 }

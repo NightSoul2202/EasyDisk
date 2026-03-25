@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNet.Identity.EntityFramework;
+﻿using Microsoft.AspNetCore.Identity;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -10,7 +10,6 @@ namespace EasyDisk.Infrastructure.Identity
     public class ApplicationUser : IdentityUser
     {
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
-
         public long UsedQuotaBytes { get; set; } = 0;
     }
 }
