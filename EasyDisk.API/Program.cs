@@ -1,3 +1,4 @@
+using EasyDisk.API.Middlewares;
 using EasyDisk.Application.Interfaces;
 using EasyDisk.Infrastructure.Data;
 using EasyDisk.Infrastructure.Identity.Entities;
@@ -66,6 +67,8 @@ namespace EasyDisk.API
             }
 
             app.UseHttpsRedirection();
+
+            app.UseMiddleware<ErrorHandlerMiddleware>();
 
             app.UseAuthorization();
             app.UseAuthentication();

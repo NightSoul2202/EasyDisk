@@ -12,6 +12,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Configuration;
 using Microsoft.IdentityModel.Tokens;
 using Google.Apis.Auth;
+using EasyDisk.Application.Exceptions;
 
 namespace EasyDisk.Infrastructure.Identity.Services
 {
@@ -32,44 +33,17 @@ namespace EasyDisk.Infrastructure.Identity.Services
 
             if (user == null || !await _userManager.CheckPasswordAsync(user, loginDto.Password))
             {
-                return new AuthResponseDto
-                {
-                    IsSuccessful = false,
-                    ErrorMessage = "Invalid email or password."
-                };
+                throw new ValidationException("Invalid email or password.");
             }
             
             var token = GenerateJwtToken(user);
 
             return new AuthResponseDto
             {
-                IsSuccessful = true,
                 Token = token,
                 Email = user.Email,
                 UserId = user.Id
             };
-        }
-
-        private string GenerateJwtToken(ApplicationUser user)
-        {
-            var authClaims = new List<Claim>
-            {
-                new Claim(ClaimTypes.NameIdentifier, user.Id),
-                new Claim(ClaimTypes.Email, user.Email!),
-                new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
-            };
-
-            var authSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_configuration["JwtSettings:Secret"]!));
-
-            var token = new JwtSecurityToken(
-                issuer: _configuration["JwtSettings:Issuer"],
-                audience: _configuration["JwtSettings:Audience"],
-                expires: DateTime.UtcNow.AddHours(3),
-                claims: authClaims,
-                signingCredentials: new SigningCredentials(authSigningKey, SecurityAlgorithms.HmacSha256)
-            );
-
-            return new JwtSecurityTokenHandler().WriteToken(token);
         }
 
         public async Task<AuthResponseDto> RegisterAsync(RegisterDto registerDto)
@@ -77,11 +51,7 @@ namespace EasyDisk.Infrastructure.Identity.Services
             var userExists = await _userManager.FindByEmailAsync(registerDto.Email);
             if (userExists != null)
             {
-                return new AuthResponseDto
-                {
-                    IsSuccessful = false,
-                    ErrorMessage = "User with this email already exists."
-                };
+                throw new ValidationException($"User with email {registerDto.Email} already exists.");
             }
 
             var user = new ApplicationUser
@@ -95,14 +65,10 @@ namespace EasyDisk.Infrastructure.Identity.Services
             if (!result.Succeeded)
             {
                 var errors = string.Join("; ", result.Errors.Select(e => e.Description));
-                return new AuthResponseDto
-                {
-                    IsSuccessful = false,
-                    ErrorMessage = $"User creation failed: {errors}"
-                };
+                throw new ValidationException($"Register failed: {errors}");
             }
 
-            return new AuthResponseDto { IsSuccessful = true };
+            return new AuthResponseDto {};
         }
 
         public async Task<AuthResponseDto> GoogleLoginAsync(GoogleLoginDto googleLoginDto)
@@ -132,11 +98,7 @@ namespace EasyDisk.Infrastructure.Identity.Services
                     if (!result.Succeeded)
                     {
                         var errors = string.Join("; ", result.Errors.Select(e => e.Description));
-                        return new AuthResponseDto
-                        {
-                            IsSuccessful = false,
-                            ErrorMessage = $"User creation failed: {errors}"
-                        };
+                        throw new ValidationException($"Google login failed: {errors}");
                     }
                 }
 
@@ -144,7 +106,6 @@ namespace EasyDisk.Infrastructure.Identity.Services
 
                 return new AuthResponseDto
                 {
-                    IsSuccessful = true,
                     Token = token,
                     Email = user.Email,
                     UserId = user.Id
@@ -152,12 +113,30 @@ namespace EasyDisk.Infrastructure.Identity.Services
             }
             catch (InvalidJwtException)
             {
-                return new AuthResponseDto
-                {
-                    IsSuccessful = false,
-                    ErrorMessage = $"Недійсний токен Google"
-                };
+               throw new ValidationException("Invalid Google token.");
             }
+        }
+
+        private string GenerateJwtToken(ApplicationUser user)
+        {
+            var authClaims = new List<Claim>
+            {
+                new Claim(ClaimTypes.NameIdentifier, user.Id),
+                new Claim(ClaimTypes.Email, user.Email!),
+                new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
+            };
+
+            var authSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_configuration["JwtSettings:Secret"]!));
+
+            var token = new JwtSecurityToken(
+                issuer: _configuration["JwtSettings:Issuer"],
+                audience: _configuration["JwtSettings:Audience"],
+                expires: DateTime.UtcNow.AddHours(3),
+                claims: authClaims,
+                signingCredentials: new SigningCredentials(authSigningKey, SecurityAlgorithms.HmacSha256)
+            );
+
+            return new JwtSecurityTokenHandler().WriteToken(token);
         }
     }
 }

@@ -18,17 +18,7 @@ namespace EasyDisk.API.Controllers
         [HttpPost("register")]
         public async Task<IActionResult> Register([FromBody] RegisterDto registerDto)
         {
-            if (!ModelState.IsValid)
-            {
-                return BadRequest(ModelState);
-            }
-
-            var result = await _authService.RegisterAsync(registerDto);
-
-            if (!result.IsSuccessful)
-            {
-                return BadRequest(new { error = result.ErrorMessage });
-            }
+            await _authService.RegisterAsync(registerDto);
 
             return Ok(new { message = "Register is success!" });
         }
@@ -36,17 +26,7 @@ namespace EasyDisk.API.Controllers
         [HttpPost("login")]
         public async Task<IActionResult> Login([FromBody] LoginDto loginDto)
         {
-            if (!ModelState.IsValid)
-            {
-                return BadRequest(ModelState);
-            }
-
             var result = await _authService.LoginAsync(loginDto);
-
-            if (!result.IsSuccessful)
-            {
-                return Unauthorized(new { error = result.ErrorMessage });
-            }
 
             return Ok(result);
         }
@@ -54,17 +34,7 @@ namespace EasyDisk.API.Controllers
         [HttpPost("google-login")]
         public async Task<IActionResult> GoogleLogin([FromBody] GoogleLoginDto googleLoginDto)
         {
-            if (!ModelState.IsValid)
-            {
-                return BadRequest(ModelState);
-            }
-
             var result = await _authService.GoogleLoginAsync(googleLoginDto);
-
-            if (!result.IsSuccessful)
-            {
-                return Unauthorized(new { error = result.ErrorMessage });
-            }
 
             return Ok(result);
         }

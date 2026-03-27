@@ -21,10 +21,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Folder Include="Middlewares\" />
-  </ItemGroup>
-
-  <ItemGroup>
     <ProjectReference Include="..\EasyDisk.Infrastructure\EasyDisk.Infrastructure.csproj" />
   </ItemGroup>
 
