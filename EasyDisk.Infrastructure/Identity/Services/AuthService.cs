@@ -11,6 +11,7 @@ using EasyDisk.Infrastructure.Identity.Entities;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Configuration;
 using Microsoft.IdentityModel.Tokens;
+using Google.Apis.Auth;
 
 namespace EasyDisk.Infrastructure.Identity.Services
 {
@@ -102,6 +103,61 @@ namespace EasyDisk.Infrastructure.Identity.Services
             }
 
             return new AuthResponseDto { IsSuccessful = true };
+        }
+
+        public async Task<AuthResponseDto> GoogleLoginAsync(GoogleLoginDto googleLoginDto)
+        {
+            try
+            {
+                var settings = new GoogleJsonWebSignature.ValidationSettings()
+                {
+                    Audience = new List<string>() { _configuration["Authentication:Google:ClientId"]! }
+                };
+
+                var payload = await GoogleJsonWebSignature.ValidateAsync(googleLoginDto.IdToken, settings);
+
+                var user = await _userManager.FindByEmailAsync(payload.Email);
+
+                if (user == null)
+                {
+                    user = new ApplicationUser
+                    {
+                        Email = payload.Email,
+                        UserName = payload.Email,
+                        SecurityStamp = Guid.NewGuid().ToString(),
+                    };
+
+                    var result = await _userManager.CreateAsync(user);
+
+                    if (!result.Succeeded)
+                    {
+                        var errors = string.Join("; ", result.Errors.Select(e => e.Description));
+                        return new AuthResponseDto
+                        {
+                            IsSuccessful = false,
+                            ErrorMessage = $"User creation failed: {errors}"
+                        };
+                    }
+                }
+
+                var token = GenerateJwtToken(user);
+
+                return new AuthResponseDto
+                {
+                    IsSuccessful = true,
+                    Token = token,
+                    Email = user.Email,
+                    UserId = user.Id
+                };
+            }
+            catch (InvalidJwtException)
+            {
+                return new AuthResponseDto
+                {
+                    IsSuccessful = false,
+                    ErrorMessage = $"Недійсний токен Google"
+                };
+            }
         }
     }
 }

@@ -50,5 +50,23 @@ namespace EasyDisk.API.Controllers
 
             return Ok(result);
         }
+
+        [HttpPost("google-login")]
+        public async Task<IActionResult> GoogleLogin([FromBody] GoogleLoginDto googleLoginDto)
+        {
+            if (!ModelState.IsValid)
+            {
+                return BadRequest(ModelState);
+            }
+
+            var result = await _authService.GoogleLoginAsync(googleLoginDto);
+
+            if (!result.IsSuccessful)
+            {
+                return Unauthorized(new { error = result.ErrorMessage });
+            }
+
+            return Ok(result);
+        }
     }
 }

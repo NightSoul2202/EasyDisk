@@ -11,5 +11,6 @@ namespace EasyDisk.Application.Interfaces
     {
         Task<AuthResponseDto> RegisterAsync(RegisterDto registerDto);
         Task<AuthResponseDto> LoginAsync(LoginDto loginDto);
+        Task<AuthResponseDto> GoogleLoginAsync(GoogleLoginDto googleLoginDto);
     }
 }
