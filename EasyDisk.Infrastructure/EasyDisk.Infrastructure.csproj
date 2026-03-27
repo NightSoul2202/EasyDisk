@@ -23,6 +23,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\EasyDisk.Domain\EasyDisk.Domain.csproj" />
+    <ProjectReference Include="..\EasyDisk.Application\EasyDisk.Application.csproj" />
   </ItemGroup>
 
 </Project>

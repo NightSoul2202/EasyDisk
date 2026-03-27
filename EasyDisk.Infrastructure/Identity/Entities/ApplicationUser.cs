@@ -5,7 +5,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace EasyDisk.Infrastructure.Identity
+namespace EasyDisk.Infrastructure.Identity.Entities
 {
     public class ApplicationUser : IdentityUser
     {

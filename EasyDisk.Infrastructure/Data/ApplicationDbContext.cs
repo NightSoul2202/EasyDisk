@@ -1,5 +1,5 @@
 ﻿using EasyDisk.Domain.Entities;
-using EasyDisk.Infrastructure.Identity;
+using EasyDisk.Infrastructure.Identity.Entities;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using System;
