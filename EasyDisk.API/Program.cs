@@ -1,5 +1,7 @@
 using EasyDisk.API.Middlewares;
+using EasyDisk.API.Services;
 using EasyDisk.Application.Interfaces;
+using EasyDisk.Application.Services;
 using EasyDisk.Infrastructure.Data;
 using EasyDisk.Infrastructure.Identity.Entities;
 using EasyDisk.Infrastructure.Identity.Services;
@@ -51,11 +53,14 @@ namespace EasyDisk.API
             });
 
             builder.Services.AddScoped<IAuthService, AuthService>();
+            builder.Services.AddScoped<ICurrentUserService, CurrentUserService>();
+            builder.Services.AddScoped<IFolderService, FolderService>();
 
             builder.Services.AddControllers();
             // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
             builder.Services.AddEndpointsApiExplorer();
             builder.Services.AddSwaggerGen();
+            builder.Services.AddHttpContextAccessor();
 
             var app = builder.Build();
 
