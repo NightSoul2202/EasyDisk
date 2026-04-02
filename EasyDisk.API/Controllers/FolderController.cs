@@ -24,5 +24,13 @@ namespace EasyDisk.API.Controllers
             var result = await _folderService.CreateFolderAsync(createFolderDto);
             return Created("", result);
         }
+
+        [HttpGet]
+        [Route("get-folders")]
+        public async Task<IActionResult> GetFolders([FromQuery] int? parentFolderId = null)
+        {
+            var result = await _folderService.GetFoldersAsync(parentFolderId);
+            return Ok(result);
+        }
     }
 }

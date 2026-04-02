@@ -5,7 +5,6 @@ using EasyDisk.Domain.Entities;
 using EasyDisk.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using System;
-using System.Data.Entity;
 using System.Threading.Tasks;
 
 namespace EasyDisk.Application.Services
@@ -48,12 +47,29 @@ namespace EasyDisk.Application.Services
             };
         }
 
+        public async Task<IEnumerable<FolderResponseDto>> GetFoldersAsync(int? parentFolderId = null)
+        {
+            var userId = _currentUserService.UserId ?? throw new ValidationException("User must be authenticated to view folders.");
+
+            return await _dbContext.Folders
+                .Where(f => f.OwnerId == userId && f.ParentFolderId == parentFolderId)
+                .Select(f => new FolderResponseDto
+                {
+                    Id = f.Id,
+                    Name = f.Name,
+                    ParentFolderId = f.ParentFolderId,
+                    CreatedAt = f.CreatedAt
+                })
+                .ToListAsync();
+        }
+
         private async Task EnsureNameIsUniqueAsync(CreateFolderDto createFolderDto, string userId)
         {
             var dublicateExists = await _dbContext.Folders
                 .FirstOrDefaultAsync(f => f.Name == createFolderDto.Name
                             && f.ParentFolderId == createFolderDto.ParentFolderId
                             && f.OwnerId == userId);
+
             if (dublicateExists != null)
             {
                 throw new ValidationException($"A folder with name {createFolderDto.Name} already exists in the specified location.");
@@ -67,7 +83,10 @@ namespace EasyDisk.Application.Services
                 var exists = await _dbContext.Folders
                     .AnyAsync(f => f.Id == createFolderDto.ParentFolderId && f.OwnerId == userId);
 
-                if (!exists) throw new NotFoundException("Parent folder", createFolderDto.ParentFolderId);
+                if (!exists)
+                {
+                    throw new NotFoundException("Parent folder", createFolderDto.ParentFolderId);
+                }
             }
         }
     }

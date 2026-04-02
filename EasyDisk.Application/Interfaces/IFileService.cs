@@ -7,9 +7,8 @@ using System.Threading.Tasks;
 
 namespace EasyDisk.Application.Interfaces
 {
-    public interface IFolderService
+    public interface IFileService
     {
-        Task<FolderResponseDto> CreateFolderAsync(CreateFolderDto createFolderDto);
-        Task<IEnumerable<FolderResponseDto>> GetFoldersAsync(int? parentFolderId = null);
+        Task<FileResponseDto?> UploadChunkAsync(UploadChunkDto uploadChunkDto, Stream chunkStream);
     }
 }
