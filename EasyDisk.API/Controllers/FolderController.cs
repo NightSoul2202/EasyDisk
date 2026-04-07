@@ -32,5 +32,22 @@ namespace EasyDisk.API.Controllers
             var result = await _folderService.GetFoldersAsync(parentFolderId);
             return Ok(result);
         }
+
+        [HttpPut]
+        [Route("update-folder/{folderId}")]
+        public async Task<IActionResult> UpdateFolder(int folderId, [FromBody] UpdateFolderDto updateFolderDto)
+        {
+            var result = await _folderService.UpdateFolderAsync(folderId, updateFolderDto);
+            return Ok(result);
+        }
+
+        [HttpDelete]
+        [Route("soft-delete-folder/{folderId}")]
+        public async Task<IActionResult> SoftDeleteFolder(int folderId)
+        {
+            await _folderService.SoftDeleteFolderAsync(folderId);
+            return NoContent();
+        }
+
     }
 }

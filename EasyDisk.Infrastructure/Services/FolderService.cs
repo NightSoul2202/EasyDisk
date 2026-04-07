@@ -24,7 +24,7 @@ namespace EasyDisk.Application.Services
         {
             var userId = _currentUserService.UserId ?? throw new ValidationException("User must be authenticated to create a folder.");
 
-            await ValidateParentFolderAsync(createFolderDto, userId);
+            await ValidateParentFolderAsync(createFolderDto.ParentFolderId, userId);
             await EnsureNameIsUniqueAsync(createFolderDto, userId);
 
             var folder = new FolderEntity
@@ -63,6 +63,96 @@ namespace EasyDisk.Application.Services
                 .ToListAsync();
         }
 
+        public async Task SoftDeleteFolderAsync(int folderId)
+        {
+            var userId = _currentUserService.UserId ?? throw new ValidationException("User must be authenticated to delete a folder.");
+
+            var rootFolder = await _dbContext.Folders.FirstOrDefaultAsync(f => f.Id == folderId && f.OwnerId == userId && f.DeletedAt == null);
+            if(rootFolder == null)
+            {
+                throw new NotFoundException("Folder", folderId);
+            }
+
+            await MarkFolderAsDeletedRecursiveAsync(folderId, userId);
+
+            await _dbContext.SaveChangesAsync();
+        }
+
+        public async Task<FolderResponseDto> UpdateFolderAsync(int folderId, UpdateFolderDto updateFolderDto)
+        {
+            var userId = _currentUserService.UserId ?? throw new ValidationException("User must be authenticated to update a folder.");
+
+            var folder = await _dbContext.Folders.FirstOrDefaultAsync(f => f.Id == folderId && f.OwnerId == userId);
+            if (folder == null)
+            {
+                throw new NotFoundException("Folder", folderId);
+            }
+
+            if (updateFolderDto.ParentFolderId != folder.ParentFolderId)
+            {
+                if(updateFolderDto.ParentFolderId == folder.Id)
+                {
+                    throw new ValidationException("A folder cannot be its own parent.");
+                }
+
+                await ValidateParentFolderAsync(updateFolderDto.ParentFolderId, userId);
+            }
+
+            await EnsureNameIsNotDublicateExists(updateFolderDto, folderId, userId);
+
+            folder.Name = updateFolderDto.Name;
+            folder.ParentFolderId = updateFolderDto.ParentFolderId;
+
+            await _dbContext.SaveChangesAsync();
+
+            return new FolderResponseDto
+            {
+                Id = folder.Id,
+                Name = folder.Name,
+                ParentFolderId = folder.ParentFolderId,
+                CreatedAt = folder.CreatedAt
+            };
+        }
+
+        private async Task MarkFolderAsDeletedRecursiveAsync(int folderId, string userId)
+        {
+            var folder = await _dbContext.Folders
+                .Include(f => f.Files)
+                .FirstOrDefaultAsync(f => f.Id == folderId && f.OwnerId == userId);
+
+            if (folder == null || folder.DeletedAt != null)
+            {
+                return;
+            }
+
+            folder.DeletedAt = DateTime.UtcNow;
+
+            foreach (var file in folder.Files)
+            {
+                file.DeletedAt = DateTime.UtcNow;
+            }
+
+            var subFolders = await _dbContext.Folders.Where(f => f.ParentFolderId == folderId && f.OwnerId == userId && f.DeletedAt == null).ToListAsync();
+            foreach (var subFolder in subFolders)
+            {
+                await MarkFolderAsDeletedRecursiveAsync(subFolder.Id, userId);
+            }
+        }
+
+        private async Task EnsureNameIsNotDublicateExists(UpdateFolderDto updateFolderDto, int folderId, string userId)
+        {
+            var dublicateExists = await _dbContext.Folders
+                .AnyAsync(f => f.Id != folderId
+                            && f.Name == updateFolderDto.Name
+                            && f.ParentFolderId == updateFolderDto.ParentFolderId
+                            && f.OwnerId == userId);
+
+            if (dublicateExists)
+            {
+                throw new ValidationException($"A folder with name {updateFolderDto.Name} already exists in the specified location.");
+            }
+        }
+
         private async Task EnsureNameIsUniqueAsync(CreateFolderDto createFolderDto, string userId)
         {
             var dublicateExists = await _dbContext.Folders
@@ -76,16 +166,16 @@ namespace EasyDisk.Application.Services
             }
         }
 
-        private async Task ValidateParentFolderAsync(CreateFolderDto createFolderDto, string userId)
+        private async Task ValidateParentFolderAsync(int? parentFolderId, string userId)
         {
-            if (createFolderDto.ParentFolderId.HasValue)
+            if (parentFolderId.HasValue)
             {
                 var exists = await _dbContext.Folders
-                    .AnyAsync(f => f.Id == createFolderDto.ParentFolderId && f.OwnerId == userId);
+                    .AnyAsync(f => f.Id == parentFolderId && f.OwnerId == userId);
 
                 if (!exists)
                 {
-                    throw new NotFoundException("Parent folder", createFolderDto.ParentFolderId);
+                    throw new NotFoundException("Parent folder", parentFolderId);
                 }
             }
         }
