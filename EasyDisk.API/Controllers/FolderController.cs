@@ -49,5 +49,12 @@ namespace EasyDisk.API.Controllers
             return NoContent();
         }
 
+        [HttpDelete]
+        [Route("hard-delete-folder/{folderId}")]
+        public async Task<IActionResult> HardDeleteFolder(int folderId)
+        {
+            await _folderService.HardDeleteFolderAsync(folderId);
+            return NoContent();
+        }
     }
 }

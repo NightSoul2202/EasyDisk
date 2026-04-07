@@ -76,6 +76,7 @@ namespace EasyDisk.Infrastructure.Services
             {
                 File.Delete(fullPath);
             }
+
             return Task.CompletedTask;
         }
     }

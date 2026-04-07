@@ -5,6 +5,7 @@ using EasyDisk.Application.Services;
 using EasyDisk.Infrastructure.Data;
 using EasyDisk.Infrastructure.Identity.Entities;
 using EasyDisk.Infrastructure.Identity.Services;
+using EasyDisk.Infrastructure.Repositories;
 using EasyDisk.Infrastructure.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
@@ -86,6 +87,8 @@ namespace EasyDisk.API
             builder.Services.AddScoped<IFolderService, FolderService>();
             builder.Services.AddScoped<IFileStorageService, FileStorageService>();
             builder.Services.AddScoped<IFileService, FileService>();
+            builder.Services.AddScoped<IFolderRepository, FolderRepository>();
+            builder.Services.AddScoped<IFileRepository, FileRepository>();
 
             builder.Services.AddHttpContextAccessor();
 

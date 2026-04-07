@@ -13,5 +13,6 @@ namespace EasyDisk.Application.Interfaces
         Task<IEnumerable<FolderResponseDto>> GetFoldersAsync(int? parentFolderId = null);
         Task<FolderResponseDto> UpdateFolderAsync(int folderId, UpdateFolderDto updateFolderDto);
         Task SoftDeleteFolderAsync(int folderId);
+        Task HardDeleteFolderAsync(int folderId);
     }
 }
