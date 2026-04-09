@@ -10,6 +10,8 @@ namespace EasyDisk.Application.Interfaces
     public interface IFileService
     {
         Task<FileResponseDto?> UploadChunkAsync(UploadChunkDto uploadChunkDto, Stream chunkStream);
+        Task<(Stream FileStream, string ContentType, string FileName)> DownloadFileAsync(Guid fileId);
+        Task CancelUploadAsync(string uploadId);
         Task<IEnumerable<FileResponseDto>> GetFilesAsync(int? folderId = null);
         Task<FileResponseDto?> UpdateFileAsync(Guid fileId, UpdateFileDto updateFileDto);
         Task SoftDeleteFileAsync(Guid fileId);

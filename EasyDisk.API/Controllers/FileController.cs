@@ -35,6 +35,14 @@ namespace EasyDisk.API.Controllers
         }
 
         [HttpGet]
+        [Route("download/{id}")]
+        public async Task<IActionResult> Download(Guid id)
+        {
+            var (fileStream, contentType, fileName) = await _fileService.DownloadFileAsync(id);
+            return File(fileStream, contentType, fileName);
+        }
+
+        [HttpGet]
         [Route("get-files")]
         public async Task<IActionResult> GetFiles([FromQuery] int? folderId = null)
         {
@@ -48,6 +56,14 @@ namespace EasyDisk.API.Controllers
         {
             var result = await _fileService.UpdateFileAsync(fileId, updateFileDto);
             return Ok(result);
+        }
+
+        [HttpDelete]
+        [Route("cancel-upload/{uploadId}")]
+        public async Task<IActionResult> CancelUpload(string uploadId)
+        {
+            await _fileService.CancelUploadAsync(uploadId);
+            return NoContent();
         }
 
         [HttpDelete]

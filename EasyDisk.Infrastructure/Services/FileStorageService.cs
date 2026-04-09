@@ -56,6 +56,20 @@ namespace EasyDisk.Infrastructure.Services
             return Path.Combine("Uploads", finalFileName);
         }
 
+        public Task<Stream> GetFileStreamAsync(string physicalPath)
+        {
+            var fullPath = Path.Combine(Directory.GetCurrentDirectory(), "Storage", physicalPath);
+
+            if(!File.Exists(fullPath))
+            {
+                throw new StorageFileNotFoundException($"File not found at path: {physicalPath}");
+            }
+
+            Stream fileStream = new FileStream(fullPath, FileMode.Open, FileAccess.Read, FileShare.Read);
+
+            return Task.FromResult(fileStream);
+        }
+
         public Task CancelUploadAsync(string uploadId)
         {
             var tempFilePath = Path.Combine(_tempDirectory, $"{uploadId}.tmp");
