@@ -1,8 +1,10 @@
 ﻿using EasyDisk.Application.DTOs;
 using EasyDisk.Application.Exceptions;
+using EasyDisk.Application.Extensions;
 using EasyDisk.Application.Interfaces;
 using EasyDisk.Domain.Entities;
 using EasyDisk.Infrastructure.Data;
+using Microsoft.AspNetCore.StaticFiles;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Identity.Client;
 using System;
@@ -11,7 +13,6 @@ using System.ComponentModel.DataAnnotations;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using Microsoft.AspNetCore.StaticFiles;
 using ValidationException = EasyDisk.Application.Exceptions.ValidationException;
 
 namespace EasyDisk.Infrastructure.Services
@@ -52,7 +53,7 @@ namespace EasyDisk.Infrastructure.Services
         {
             var userId = _currentUserService.UserId ?? throw new ValidationException("User must be authenticated to delete file.");
 
-            var file = await GetFile(fileId, userId);
+            var file = await _fileRepository.GetByIdWithTagsAsync(fileId, userId).EnsureExistsAsync(() => $"File with id {fileId} not found.");
 
             await _fileStorageService.DeleteFileAsync(file.PhysicalPath);
 
@@ -65,7 +66,7 @@ namespace EasyDisk.Infrastructure.Services
         {
             var userId = _currentUserService.UserId ?? throw new ValidationException("User must be authenticated to delete file.");
 
-            var file = await GetFile(fileId, userId);
+            var file = await _fileRepository.GetByIdWithTagsAsync(fileId, userId).EnsureExistsAsync(() => $"File with id {fileId} not found.");
 
             file.DeletedAt = DateTime.UtcNow;
 
@@ -76,14 +77,14 @@ namespace EasyDisk.Infrastructure.Services
         {
             var userId = _currentUserService.UserId ?? throw new ValidationException("User must be authenticated to update file.");
 
-            var file = await GetFile(fileId, userId);
+            var file = await _fileRepository.GetByIdWithTagsAsync(fileId, userId).EnsureExistsAsync(() => $"File with id {fileId} not found.");
 
             if (updateFileDto.FolderId != file.FolderId && updateFileDto.FolderId.HasValue)
             {
-                await ValidateFolderAsync(updateFileDto.FolderId.Value, userId);
+                await _folderRepository.ExistsAsync(updateFileDto.FolderId.Value, userId).ValidateExistsAsync(() => $"Folder with id {updateFileDto.FolderId.Value} not found.");
             }
 
-            await EnsureNameIsUniqueAsync(updateFileDto.Name, file.Extension, updateFileDto.FolderId, userId, fileId);
+            await _fileRepository.IsNameTakenAsync(updateFileDto.Name, file.Extension, updateFileDto.FolderId, userId, fileId).EnsureNameIsUniqueAsync(() => $"File with name {updateFileDto.Name} already exists in the folder.");
 
             file.Name = updateFileDto.Name;
             file.FolderId = updateFileDto.FolderId;
@@ -107,7 +108,7 @@ namespace EasyDisk.Infrastructure.Services
 
             if (uploadChunkDto.FolderId.HasValue)
             {
-                await ValidateFolderAsync(uploadChunkDto.FolderId.Value, userId);
+                await _folderRepository.ExistsAsync(uploadChunkDto.FolderId.Value, userId).ValidateExistsAsync(() => $"Folder with id {uploadChunkDto.FolderId.Value} not found.");
             }
 
             await _fileStorageService.AppendChunkAsync(uploadChunkDto.UploadId, chunkStream);
@@ -155,7 +156,7 @@ namespace EasyDisk.Infrastructure.Services
         {
             var userId = _currentUserService.UserId ?? throw new ValidationException("User must be authenticated to download file.");
 
-            var file = await GetFile(fileId, userId);
+            var file = await _fileRepository.GetByIdWithTagsAsync(fileId, userId).EnsureExistsAsync(() => $"File with id {fileId} not found.");
 
             var fileStream = await _fileStorageService.GetFileStreamAsync(file.PhysicalPath);
 
@@ -171,34 +172,6 @@ namespace EasyDisk.Infrastructure.Services
         public async Task CancelUploadAsync(string uploadId)
         {
             await _fileStorageService.CancelUploadAsync(uploadId);
-        }
-
-        private async Task<FileEntity> GetFile(Guid fileId, string userId)
-        {
-            var file = await _fileRepository.GetByIdAsync(fileId, userId);
-            if (file == null)
-            {
-                throw new NotFoundException("File", fileId);
-            }
-            return file;
-        }
-
-        private async Task ValidateFolderAsync(int folderId, string userId)
-        {
-            var folderExists = await _folderRepository.ExistsAsync(folderId, userId);
-            if (!folderExists)
-            {
-                throw new NotFoundException("Folder", folderId);
-            }
-        }
-
-        private async Task EnsureNameIsUniqueAsync(string name, string extension, int? folderId, string userId, Guid? fileId = null)
-        {
-            var dublicateExists = await _fileRepository.IsNameTakenAsync(name, extension, folderId, userId, fileId);
-            if (dublicateExists)
-            {
-                throw new ValidationException($"A file with name {name} already exists in the target folder.");
-            }
         }
     }
 }

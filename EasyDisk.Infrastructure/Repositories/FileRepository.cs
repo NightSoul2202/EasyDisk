@@ -40,6 +40,11 @@ namespace EasyDisk.Infrastructure.Repositories
             return await _dbContext.Files.FirstOrDefaultAsync(f => f.Id == id && f.OwnerId == ownerId);
         }
 
+        public async Task<FileEntity?> GetByIdWithTagsAsync(Guid id, string ownerId)
+        {
+            return await _dbContext.Files.Include(f => f.Tags).FirstOrDefaultAsync(f => f.Id == id && f.OwnerId == ownerId);
+        }
+
         public async Task<bool> IsNameTakenAsync(string name, string extension, int? folderId, string ownerId, Guid? excludeFileId = null)
         {
             var query = _dbContext.Files

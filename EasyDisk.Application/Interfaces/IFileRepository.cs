@@ -10,6 +10,7 @@ namespace EasyDisk.Application.Interfaces
     public interface IFileRepository
     {
         Task<FileEntity?> GetByIdAsync(Guid id, string ownerId);
+        Task<FileEntity?> GetByIdWithTagsAsync(Guid id, string ownerId);
         Task<List<FileEntity>> GetByFolderIdAsync(int? folderId, string ownerId);
         Task<bool> IsNameTakenAsync(string name, string extension, int? folderId, string ownerId, Guid? excludeFileId = null);
 

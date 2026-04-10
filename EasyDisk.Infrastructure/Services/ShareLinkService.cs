@@ -1,5 +1,6 @@
 ﻿using EasyDisk.Application.DTOs;
 using EasyDisk.Application.Exceptions;
+using EasyDisk.Application.Extensions;
 using EasyDisk.Application.Interfaces;
 using EasyDisk.Domain.Entities;
 using Microsoft.AspNetCore.StaticFiles;
@@ -34,7 +35,7 @@ namespace EasyDisk.Infrastructure.Services
         {
             var userId = _currentUserService.UserId ?? throw new ValidationException("User must be authenticated to create a share link.");
 
-            var file = await GetFile(dto.FileId, userId);
+            var file = await _fileRepository.GetByIdAsync(dto.FileId, userId).EnsureExistsAsync(() => $"File with id {dto.FileId} not found.");
 
             var token = Guid.NewGuid().ToString("N").Substring(0, 12);
 
@@ -96,16 +97,6 @@ namespace EasyDisk.Infrastructure.Services
             }
 
             return (stream, contentType, shareLink.File.Name);
-        }
-
-        private async Task<FileEntity> GetFile(Guid fileId, string userId)
-        {
-            var file = await _fileRepository.GetByIdAsync(fileId, userId);
-            if (file == null)
-            {
-                throw new NotFoundException("File", fileId);
-            }
-            return file;
         }
     }
 }

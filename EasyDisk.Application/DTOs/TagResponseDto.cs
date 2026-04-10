@@ -4,17 +4,13 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace EasyDisk.Domain.Entities
+namespace EasyDisk.Application.DTOs
 {
-    public class TagEntity
+    public class TagResponseDto
     {
         public int Id { get; set; }
         public string Name { get; set; } = string.Empty;
         public string Color { get; set; } = "#000000";
-
-        public string OwnerId { get; set; } = string.Empty;
         public DateTime CreatedAt { get; set; }
-
-        public ICollection<FileEntity> Files { get; set; } = new List<FileEntity>();
     }
 }

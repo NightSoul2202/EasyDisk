@@ -89,6 +89,8 @@ namespace EasyDisk.API
             builder.Services.AddScoped<IFileService, FileService>();
             builder.Services.AddScoped<IFolderRepository, FolderRepository>();
             builder.Services.AddScoped<IFileRepository, FileRepository>();
+            builder.Services.AddScoped<ITagRepository, TagRepository>();
+            builder.Services.AddScoped<ITagService, TagService>();
 
             builder.Services.AddHttpContextAccessor();
 
