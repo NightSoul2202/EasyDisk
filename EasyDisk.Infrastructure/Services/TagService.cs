@@ -94,5 +94,40 @@ namespace EasyDisk.Infrastructure.Services
                 await _fileRepository.SaveChangesAsync();
             }
         }
+
+        public async Task<TagResponseDto> UpdateTagAsync(int tagId, UpdateTagDto dto)
+        {
+            var userId = _currentUserService.UserId ?? throw new ValidationException("User must be authenticated to update a tag.");
+
+            var tag = await _tagRepository.GetByIdAsync(tagId, userId).EnsureExistsAsync(() => $"Tag with id {tagId} not found.");
+
+            if (!string.Equals(tag.Name, dto.Name, StringComparison.OrdinalIgnoreCase))
+            {
+                var existingTag = await _tagRepository.GetByNameAsync(dto.Name, userId).EnsureExistsNameAsync(() => $"Tag with name {dto.Name} already exists.");
+            }
+
+            tag.Name = dto.Name;
+            tag.Color = dto.Color;
+
+            await _tagRepository.SaveChangesAsync();
+
+            return new TagResponseDto
+            {
+                Id = tag.Id,
+                Name = tag.Name,
+                Color = tag.Color,
+                CreatedAt = tag.CreatedAt
+            };
+        }
+
+        public async Task DeleteTagAsync(int tagId)
+        {
+            var userId = _currentUserService.UserId ?? throw new ValidationException("User must be authenticated to delete a tag.");
+
+            var tag = await _tagRepository.GetByIdAsync(tagId, userId).EnsureExistsAsync(() => $"Tag with id {tagId} not found.");
+
+            _tagRepository.Delete(tag);
+            await _tagRepository.SaveChangesAsync();
+        }
     }
 }

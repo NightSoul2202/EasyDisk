@@ -1,4 +1,5 @@
-﻿using EasyDisk.Domain.Entities;
+﻿using EasyDisk.Application.DTOs;
+using EasyDisk.Domain.Entities;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -13,6 +14,7 @@ namespace EasyDisk.Application.Interfaces
         Task<FileEntity?> GetByIdWithTagsAsync(Guid id, string ownerId);
         Task<List<FileEntity>> GetByFolderIdAsync(int? folderId, string ownerId);
         Task<bool> IsNameTakenAsync(string name, string extension, int? folderId, string ownerId, Guid? excludeFileId = null);
+        Task<List<FileEntity>> SearchFilesAsync(FileSearchParametersDto searchTerm, string ownerId);
 
         Task AddAsync(FileEntity file);
         Task SaveChangesAsync();

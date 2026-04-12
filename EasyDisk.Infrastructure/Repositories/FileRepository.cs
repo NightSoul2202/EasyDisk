@@ -1,4 +1,5 @@
-﻿using EasyDisk.Application.Interfaces;
+﻿using EasyDisk.Application.DTOs;
+using EasyDisk.Application.Interfaces;
 using EasyDisk.Domain.Entities;
 using EasyDisk.Infrastructure.Data;
 using System;
@@ -56,6 +57,39 @@ namespace EasyDisk.Infrastructure.Repositories
             }
 
             return await query.AnyAsync();
+        }
+
+        public async Task<List<FileEntity>> SearchFilesAsync(FileSearchParametersDto searchTerm, string ownerId)
+        {
+            var query = _dbContext.Files
+                .Include(f => f.Tags)
+                .Where(f => f.OwnerId == ownerId)
+                .AsQueryable();
+
+            if (!string.IsNullOrWhiteSpace(searchTerm.SearchTerm))
+            {
+                query = query.Where(f => f.Name.Contains(searchTerm.SearchTerm));
+            }
+
+            if (!string.IsNullOrWhiteSpace(searchTerm.Extension))
+            {
+                query = query.Where(f => f.Extension == searchTerm.Extension);
+            }
+
+            if (searchTerm.FolderId.HasValue)
+            {
+                query = query.Where(f => f.FolderId == searchTerm.FolderId);
+            }
+
+            if (searchTerm.TagIds != null && searchTerm.TagIds.Any())
+            {
+                foreach (var tagId in searchTerm.TagIds)
+                {
+                    query = query.Where(f => f.Tags.Any(t => t.Id == tagId));
+                }
+            }
+
+            return await query.ToListAsync();
         }
 
         public async Task SaveChangesAsync()

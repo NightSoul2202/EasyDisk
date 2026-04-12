@@ -121,6 +121,8 @@ namespace EasyDisk.Application.Services
             var rootFolder = await _folderRepository.GetByIdWithFilesAsync(folderId, userId).EnsureExistsAsync(() => $"Folder with id {folderId} not found.");
 
             await ExecuteHardDeleteRecursiveAsync(rootFolder, userId);
+
+            await _folderRepository.SaveChangesAsync();
         }
 
         private async Task ExecuteHardDeleteRecursiveAsync(FolderEntity folder, string userId)

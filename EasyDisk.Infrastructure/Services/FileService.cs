@@ -48,6 +48,29 @@ namespace EasyDisk.Infrastructure.Services
                 CreatedAt = f.CreatedAt
             });
         }
+        public async Task<IEnumerable<FileResponseDto>> SearchFilesAsync(FileSearchParametersDto dto)
+        {
+            var userId = _currentUserService.UserId ?? throw new ValidationException("User must be authenticated to search files.");
+
+            var filesQuery = await _fileRepository.SearchFilesAsync(dto, userId);
+
+            return filesQuery.Select(f => new FileResponseDto
+            {
+                Id = f.Id,
+                Name = f.Name,
+                Size = f.Size,
+                Extension = f.Extension,
+                FolderId = f.FolderId,
+                CreatedAt = f.CreatedAt,
+                Tags = f.Tags.Select(t => new TagResponseDto
+                {
+                    Id = t.Id,
+                    Name = t.Name,
+                    Color = t.Color,
+                    CreatedAt = t.CreatedAt
+                }).ToList()
+            });
+        }
 
         public async Task HardDeleteFileAsync(Guid fileId)
         {

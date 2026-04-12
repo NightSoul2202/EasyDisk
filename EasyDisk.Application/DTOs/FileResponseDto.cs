@@ -14,5 +14,6 @@ namespace EasyDisk.Application.DTOs
         public string Extension { get; set; } = string.Empty;
         public int? FolderId { get; set; }
         public DateTime CreatedAt { get; set; }
+        public List<EasyDisk.Application.DTOs.TagResponseDto> Tags { get; set; } = new();
     }
 }

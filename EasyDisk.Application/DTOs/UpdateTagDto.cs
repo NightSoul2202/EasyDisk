@@ -7,7 +7,7 @@ using System.Threading.Tasks;
 
 namespace EasyDisk.Application.DTOs
 {
-    public class CreateTagDto
+    public class UpdateTagDto
     {
         [Required, MaxLength(50)]
         public string Name { get; set; } = string.Empty;

@@ -50,6 +50,14 @@ namespace EasyDisk.API.Controllers
             return Ok(files);
         }
 
+        [HttpGet]
+        [Route("search")]
+        public async Task<IActionResult> SearchFiles([FromQuery] FileSearchParametersDto dto)
+        {
+            var files = await _fileService.SearchFilesAsync(dto);
+            return Ok(files);
+        }
+
         [HttpPut]
         [Route("update-file/{fileId}")]
         public async Task<IActionResult> UpdateFile(Guid fileId, [FromBody] UpdateFileDto updateFileDto)

@@ -41,11 +41,27 @@ namespace EasyDisk.API.Controllers
             return Ok(tags);
         }
 
+        [HttpPut]
+        [Route("{tagId}/update-tag")]
+        public async Task<IActionResult> UpdateTag(int tagId, [FromBody] UpdateTagDto dto)
+        {
+            var tag = await _tagService.UpdateTagAsync(tagId, dto);
+            return Ok(tag);
+        }
+
         [HttpDelete]
         [Route("{tagId}/detach/{fileId}")]
         public async Task<IActionResult> DetachTag(int tagId, Guid fileId)
         {
             await _tagService.DetachTagFromFileAsync(fileId, tagId);
+            return NoContent();
+        }
+
+        [HttpDelete]
+        [Route("{tagId}/delete-tag")]
+        public async Task<IActionResult> DeleteTag(int tagId)
+        {
+            await _tagService.DeleteTagAsync(tagId);
             return NoContent();
         }
     }
