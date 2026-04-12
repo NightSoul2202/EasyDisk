@@ -51,6 +51,14 @@ namespace EasyDisk.API.Controllers
         }
 
         [HttpGet]
+        [Route("{id}/versions")]
+        public async Task<IActionResult> GetFileVersions(Guid id)
+        {
+            var versions = await _fileService.GetFileVersionsAsync(id);
+            return Ok(versions);
+        }
+
+        [HttpGet]
         [Route("search")]
         public async Task<IActionResult> SearchFiles([FromQuery] FileSearchParametersDto dto)
         {

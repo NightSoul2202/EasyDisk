@@ -46,10 +46,22 @@ namespace EasyDisk.Infrastructure.Repositories
             return await _dbContext.Files.Include(f => f.Tags).FirstOrDefaultAsync(f => f.Id == id && f.OwnerId == ownerId);
         }
 
+        public async Task<FileEntity?> GetByNameWithVersionsAsync(string name, string extension, int? folderId, string ownerId)
+        {
+            return await _dbContext.Files
+                .Include(f => f.Versions)
+                .FirstOrDefaultAsync(f => f.Name == name && f.Extension == extension && f.FolderId == folderId && f.OwnerId == ownerId);
+        }
+
+        public async Task<FileEntity?> GetByIdWithVersionsAsync(Guid id, string ownerId)
+        {
+            return await _dbContext.Files.Include(f => f.Versions).FirstOrDefaultAsync(f => f.Id == id && f.OwnerId == ownerId);
+        }
+
         public async Task<bool> IsNameTakenAsync(string name, string extension, int? folderId, string ownerId, Guid? excludeFileId = null)
         {
             var query = _dbContext.Files
-                .Where(f => f.Name == name && f.Extension == extension && f.FolderId == folderId && f.OwnerId == ownerId && f.DeletedAt == null);
+                .Where(f => f.Name == name && f.Extension == extension && f.FolderId == folderId && f.OwnerId == ownerId);
 
             if (excludeFileId.HasValue)
             {

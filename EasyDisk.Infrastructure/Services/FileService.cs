@@ -11,6 +11,7 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.Linq;
+using System.Reflection.Metadata.Ecma335;
 using System.Text;
 using System.Threading.Tasks;
 using ValidationException = EasyDisk.Application.Exceptions.ValidationException;
@@ -141,38 +142,7 @@ namespace EasyDisk.Infrastructure.Services
                 return null;
             }
 
-            var extension = Path.GetExtension(uploadChunkDto.FileName);
-
-            var physicalPath = await _fileStorageService.FinalizeUploadAsync(uploadChunkDto.UploadId, uploadChunkDto.FileName);
-
-            var fillPath = Path.Combine(Directory.GetCurrentDirectory(), "Storage", physicalPath);
-            var fileInfo = new FileInfo(fillPath);
-            var size = fileInfo.Length;
-
-            var file = new FileEntity
-            {
-                Id = Guid.NewGuid(),
-                Name = uploadChunkDto.FileName,
-                Size = size,
-                Extension = extension,
-                FolderId = uploadChunkDto.FolderId,
-                OwnerId = userId,
-                PhysicalPath = physicalPath,
-                CreatedAt = DateTime.UtcNow
-            };
-
-            await _fileRepository.AddAsync(file);
-            await _fileRepository.SaveChangesAsync();
-
-            return new FileResponseDto
-            {
-                Id = file.Id,
-                Name = file.Name,
-                Size = file.Size,
-                Extension = file.Extension,
-                FolderId = file.FolderId,
-                CreatedAt = file.CreatedAt
-            };
+            return await FinalizeUploadProcessAsync(uploadChunkDto, userId);
         }
 
         public async Task<(Stream FileStream, string ContentType, string FileName)> DownloadFileAsync(Guid fileId)
@@ -184,7 +154,7 @@ namespace EasyDisk.Infrastructure.Services
             var fileStream = await _fileStorageService.GetFileStreamAsync(file.PhysicalPath);
 
             var provider = new FileExtensionContentTypeProvider();
-            if(!provider.TryGetContentType(file.Name, out var contentType))
+            if (!provider.TryGetContentType(file.Name, out var contentType))
             {
                 contentType = "application/octet-stream";
             }
@@ -192,9 +162,111 @@ namespace EasyDisk.Infrastructure.Services
             return (fileStream, contentType, file.Name);
         }
 
+        public async Task<IEnumerable<FileVersionResponseDto>> GetFileVersionsAsync(Guid fileId)
+        {
+            var userId = _currentUserService.UserId ?? throw new ValidationException("User must be authenticated to view file versions.");
+
+            var file = await _fileRepository.GetByIdWithVersionsAsync(fileId, userId).EnsureExistsAsync(() => $"File with id {fileId} not found.");
+
+            return file.Versions
+                .OrderByDescending(v => v.VersionNumber)
+                .Select(v => new FileVersionResponseDto
+                {
+                    Id = v.Id,
+                    VersionNumber = v.VersionNumber,
+                    Size = v.Size,
+                    UploadedAt = v.UploadedAt
+                });
+        }
+
         public async Task CancelUploadAsync(string uploadId)
         {
             await _fileStorageService.CancelUploadAsync(uploadId);
+        }
+
+        private async Task<FileResponseDto> FinalizeUploadProcessAsync(UploadChunkDto uploadChunkDto, string userId)
+        {
+            var extension = Path.GetExtension(uploadChunkDto.FileName);
+
+            var physicalPath = await _fileStorageService.FinalizeUploadAsync(uploadChunkDto.UploadId, uploadChunkDto.FileName);
+
+            var fillPath = Path.Combine(Directory.GetCurrentDirectory(), "Storage", physicalPath);
+            var fileInfo = new FileInfo(fillPath);
+            var size = fileInfo.Length;
+
+            var existingFile = await _fileRepository.GetByNameWithVersionsAsync(uploadChunkDto.FileName, extension, uploadChunkDto.FolderId, userId);
+
+            if (existingFile != null)
+            {
+                return await AppendNewVersionAsync(existingFile, physicalPath, size);
+            }
+
+            return await CreateBrandNewFileAsync(uploadChunkDto, extension, physicalPath, size, userId);
+        }
+
+        private async Task<FileResponseDto> CreateBrandNewFileAsync(UploadChunkDto uploadChunkDto, string extension, string physicalPath, long size, string userId)
+        {
+            var file = new FileEntity
+            {
+                Id = Guid.NewGuid(),
+                Name = uploadChunkDto.FileName,
+                Extension = extension,
+                Size = size,
+                PhysicalPath = physicalPath,
+                OwnerId = userId,
+                FolderId = uploadChunkDto.FolderId,
+                CreatedAt = DateTime.UtcNow
+            };
+
+            var version = new FileVersionEntity
+            {
+                Id = Guid.NewGuid(),
+                VersionNumber = 1,
+                Size = size,
+                PhysicalPath = physicalPath
+            };
+
+            file.Versions.Add(version);
+
+            await _fileRepository.AddAsync(file);
+            await _fileRepository.SaveChangesAsync();
+
+            return MapToFileResponseDto(file);
+        }
+
+        private async Task<FileResponseDto> AppendNewVersionAsync(FileEntity existingFile, string newPhysicalPath, long newSize)
+        {
+            int newVersionNumber = existingFile.Versions.Any() ? existingFile.Versions.Max(v => v.VersionNumber) + 1 : 2;
+
+            var newVersion = new FileVersionEntity
+            {
+                Id = Guid.NewGuid(),
+                VersionNumber = newVersionNumber,
+                Size = newSize,
+                PhysicalPath = newPhysicalPath
+            };
+
+            existingFile.Versions.Add(newVersion);
+
+            existingFile.Size = newSize;
+            existingFile.PhysicalPath = newPhysicalPath;
+
+            await _fileRepository.SaveChangesAsync();
+
+            return MapToFileResponseDto(existingFile);
+        }
+
+        private FileResponseDto MapToFileResponseDto(FileEntity file)
+        {
+            return new FileResponseDto
+            {
+                Id = file.Id,
+                Name = file.Name,
+                Size = file.Size,
+                Extension = file.Extension,
+                FolderId = file.FolderId,
+                CreatedAt = file.CreatedAt
+            };
         }
     }
 }

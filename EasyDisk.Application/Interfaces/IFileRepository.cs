@@ -13,6 +13,8 @@ namespace EasyDisk.Application.Interfaces
         Task<FileEntity?> GetByIdAsync(Guid id, string ownerId);
         Task<FileEntity?> GetByIdWithTagsAsync(Guid id, string ownerId);
         Task<List<FileEntity>> GetByFolderIdAsync(int? folderId, string ownerId);
+        Task<FileEntity?> GetByNameWithVersionsAsync(string name, string extension, int? folderId, string ownerId);
+        Task<FileEntity?> GetByIdWithVersionsAsync(Guid id, string ownerId);
         Task<bool> IsNameTakenAsync(string name, string extension, int? folderId, string ownerId, Guid? excludeFileId = null);
         Task<List<FileEntity>> SearchFilesAsync(FileSearchParametersDto searchTerm, string ownerId);
 
