@@ -36,7 +36,7 @@ namespace EasyDisk.Infrastructure.Identity.Services
                 throw new ValidationException("Invalid email or password.");
             }
             
-            var token = GenerateJwtToken(user);
+            var token = await GenerateJwtTokenAsync(user);
 
             return new AuthResponseDto
             {
@@ -54,19 +54,7 @@ namespace EasyDisk.Infrastructure.Identity.Services
                 throw new ValidationException($"User with email {registerDto.Email} already exists.");
             }
 
-            var user = new ApplicationUser
-            {
-                Email = registerDto.Email,
-                UserName = registerDto.Email,
-                SecurityStamp = Guid.NewGuid().ToString(),
-            };
-
-            var result = await _userManager.CreateAsync(user, registerDto.Password);
-            if (!result.Succeeded)
-            {
-                var errors = string.Join("; ", result.Errors.Select(e => e.Description));
-                throw new ValidationException($"Register failed: {errors}");
-            }
+            var user = await CreateNewUserAsync(registerDto.Email, registerDto.Password);
 
             return new AuthResponseDto {};
         }
@@ -86,23 +74,10 @@ namespace EasyDisk.Infrastructure.Identity.Services
 
                 if (user == null)
                 {
-                    user = new ApplicationUser
-                    {
-                        Email = payload.Email,
-                        UserName = payload.Email,
-                        SecurityStamp = Guid.NewGuid().ToString(),
-                    };
-
-                    var result = await _userManager.CreateAsync(user);
-
-                    if (!result.Succeeded)
-                    {
-                        var errors = string.Join("; ", result.Errors.Select(e => e.Description));
-                        throw new ValidationException($"Google login failed: {errors}");
-                    }
+                    user = await CreateNewUserAsync(payload.Email);
                 }
 
-                var token = GenerateJwtToken(user);
+                var token = await GenerateJwtTokenAsync(user);
 
                 return new AuthResponseDto
                 {
@@ -117,7 +92,7 @@ namespace EasyDisk.Infrastructure.Identity.Services
             }
         }
 
-        private string GenerateJwtToken(ApplicationUser user)
+        private async Task<string> GenerateJwtTokenAsync(ApplicationUser user)
         {
             var authClaims = new List<Claim>
             {
@@ -125,6 +100,12 @@ namespace EasyDisk.Infrastructure.Identity.Services
                 new Claim(ClaimTypes.Email, user.Email!),
                 new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
             };
+
+            var userRoles = await _userManager.GetRolesAsync(user);
+            foreach (var role in userRoles)
+            {
+                authClaims.Add(new Claim(ClaimTypes.Role, role));
+            }
 
             var authSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_configuration["JwtSettings:Secret"]!));
 
@@ -137,6 +118,28 @@ namespace EasyDisk.Infrastructure.Identity.Services
             );
 
             return new JwtSecurityTokenHandler().WriteToken(token);
+        }
+
+        private async Task<ApplicationUser> CreateNewUserAsync(string email, string? password = null)
+        {
+            var user = new ApplicationUser
+            {
+                Email = email,
+                UserName = email,
+                SecurityStamp = Guid.NewGuid().ToString(),
+            };
+
+            var result = !string.IsNullOrEmpty(password)
+                ? await _userManager.CreateAsync(user, password)
+                : await _userManager.CreateAsync(user);
+
+            if (!result.Succeeded)
+            {
+                var errors = string.Join("; ", result.Errors.Select(e => e.Description));
+                throw new ValidationException($"User creation failed: {errors}");
+            }
+            await _userManager.AddToRoleAsync(user, "User");
+            return user;
         }
     }
 }

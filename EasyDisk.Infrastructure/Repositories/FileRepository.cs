@@ -2,12 +2,7 @@
 using EasyDisk.Application.Interfaces;
 using EasyDisk.Domain.Entities;
 using EasyDisk.Infrastructure.Data;
-using System;
-using System.Collections.Generic;
-using System.Data.Entity;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+using Microsoft.EntityFrameworkCore;
 
 namespace EasyDisk.Infrastructure.Repositories
 {

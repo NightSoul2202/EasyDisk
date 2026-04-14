@@ -18,7 +18,7 @@ namespace EasyDisk.API
 {
     public class Program
     {
-        public static void Main(string[] args)
+        public static async Task Main(string[] args)
         {
             var builder = WebApplication.CreateBuilder(args);
 
@@ -58,9 +58,16 @@ namespace EasyDisk.API
 
             builder.Services.AddDbContext<ApplicationDbContext>(options => options.UseSqlServer(connectionString));
 
-            builder.Services.AddIdentityCore<ApplicationUser>()
-                   .AddRoles<IdentityRole>()
-                   .AddEntityFrameworkStores<ApplicationDbContext>();
+            builder.Services.AddIdentityCore<ApplicationUser>(options => 
+            {
+                options.Lockout.AllowedForNewUsers = true;
+                options.Lockout.MaxFailedAccessAttempts = 5;
+                options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(5);
+            })
+            .AddRoles<IdentityRole>()
+            .AddRoleManager<RoleManager<IdentityRole>>()
+            .AddEntityFrameworkStores<ApplicationDbContext>()
+            .AddDefaultTokenProviders();
 
             builder.Services.AddAuthentication(options =>
             {
@@ -95,6 +102,22 @@ namespace EasyDisk.API
             builder.Services.AddHttpContextAccessor();
 
             var app = builder.Build();
+
+            using (var scope = app.Services.CreateScope())
+            {
+                var services = scope.ServiceProvider;
+                var logger = services.GetRequiredService<ILogger<Program>>();
+
+                try
+                {
+                    logger.LogInformation("Start seeding database...");
+                    await DbSeeder.SeedRolesAndAdminAsync(services);
+                }
+                catch (Exception ex)
+                {
+                    logger.LogError(ex, "Critical error occurred while seeding the database.");
+                }
+            }
 
             // Configure the HTTP request pipeline.
             if (app.Environment.IsDevelopment())

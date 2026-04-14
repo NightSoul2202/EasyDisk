@@ -22,15 +22,17 @@ namespace EasyDisk.Infrastructure.Services
     {
         private readonly IFileRepository _fileRepository;
         private readonly IFolderRepository _folderRepository;
+        private readonly IUserRepository _userRepository;
         private readonly ICurrentUserService _currentUserService;
         private readonly IFileStorageService _fileStorageService;
 
-        public FileService(IFileRepository fileRepository, IFolderRepository folderRepository, ICurrentUserService currentUserService, IFileStorageService fileStorageService)
+        public FileService(IFileRepository fileRepository, IFolderRepository folderRepository, ICurrentUserService currentUserService, IFileStorageService fileStorageService, IUserRepository userRepository)
         {
             _fileRepository = fileRepository;
             _folderRepository = folderRepository;
             _currentUserService = currentUserService;
             _fileStorageService = fileStorageService;
+            _userRepository = userRepository;
         }
 
         public async Task<IEnumerable<FileResponseDto>> GetFilesAsync(int? folderId = null)
@@ -78,6 +80,8 @@ namespace EasyDisk.Infrastructure.Services
             var userId = _currentUserService.UserId ?? throw new ValidationException("User must be authenticated to delete file.");
 
             var file = await _fileRepository.GetByIdWithTagsAsync(fileId, userId).EnsureExistsAsync(() => $"File with id {fileId} not found.");
+
+            await _userRepository.UpdateUserQuotaAsync(userId, -file.Size);
 
             await _fileStorageService.DeleteFileAsync(file.PhysicalPath);
 
@@ -229,6 +233,9 @@ namespace EasyDisk.Infrastructure.Services
             file.Versions.Add(version);
 
             await _fileRepository.AddAsync(file);
+
+            await _userRepository.UpdateUserQuotaAsync(userId, size);
+
             await _fileRepository.SaveChangesAsync();
 
             return MapToFileResponseDto(file);
@@ -250,6 +257,8 @@ namespace EasyDisk.Infrastructure.Services
 
             existingFile.Size = newSize;
             existingFile.PhysicalPath = newPhysicalPath;
+
+            await _userRepository.UpdateUserQuotaAsync(existingFile.OwnerId, newSize - existingFile.Size);
 
             await _fileRepository.SaveChangesAsync();
 

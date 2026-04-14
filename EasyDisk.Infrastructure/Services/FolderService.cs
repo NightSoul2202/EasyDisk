@@ -15,14 +15,16 @@ namespace EasyDisk.Application.Services
         private readonly ICurrentUserService _currentUserService;
         private readonly IFolderRepository _folderRepository;
         private readonly IFileRepository _fileRepository;
+        private readonly IUserRepository _userRepository;
         private readonly IFileStorageService _fileStorageService;
 
-        public FolderService(ICurrentUserService currentUserService, IFolderRepository folderRepository, IFileRepository fileRepository, IFileStorageService fileStorageService)
+        public FolderService(ICurrentUserService currentUserService, IFolderRepository folderRepository, IFileRepository fileRepository, IFileStorageService fileStorageService, IUserRepository userRepository)
         {
             _currentUserService = currentUserService;
             _folderRepository = folderRepository;
             _fileRepository = fileRepository;
             _fileStorageService = fileStorageService;
+            _userRepository = userRepository;
         }
 
         public async Task<FolderResponseDto> CreateFolderAsync(CreateFolderDto createFolderDto)
@@ -120,15 +122,19 @@ namespace EasyDisk.Application.Services
 
             var rootFolder = await _folderRepository.GetByIdWithFilesAsync(folderId, userId).EnsureExistsAsync(() => $"Folder with id {folderId} not found.");
 
-            await ExecuteHardDeleteRecursiveAsync(rootFolder, userId);
+            var totalDeletedSize = await ExecuteHardDeleteRecursiveAsync(rootFolder, userId);
+
+            await _userRepository.UpdateUserQuotaAsync(userId, -totalDeletedSize);
 
             await _folderRepository.SaveChangesAsync();
         }
 
-        private async Task ExecuteHardDeleteRecursiveAsync(FolderEntity folder, string userId)
+        private async Task<long> ExecuteHardDeleteRecursiveAsync(FolderEntity folder, string userId)
         {
+            long totalDeletedSize = 0;
             foreach (var file in folder.Files)
             {
+                totalDeletedSize += file.Size;
                 await _fileStorageService.DeleteFileAsync(file.PhysicalPath);
                 _fileRepository.Delete(file);
             }
@@ -140,11 +146,12 @@ namespace EasyDisk.Application.Services
                 var detailedSubFolder = await _folderRepository.GetByIdWithFilesAsync(subFolder.Id, userId);
                 if (detailedSubFolder != null)
                 {
-                    await ExecuteHardDeleteRecursiveAsync(detailedSubFolder, userId);
+                    totalDeletedSize += await ExecuteHardDeleteRecursiveAsync(detailedSubFolder, userId);
                 }
             }
 
             _folderRepository.Delete(folder);
+            return totalDeletedSize;
         }
 
         private async Task MarkFolderAsDeletedRecursiveAsync(int folderId, string userId)
