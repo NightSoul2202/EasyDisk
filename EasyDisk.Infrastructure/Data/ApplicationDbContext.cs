@@ -24,13 +24,6 @@ namespace EasyDisk.Infrastructure.Data
         public DbSet<TagEntity> Tags { get; set; }
         public DbSet<AuditLogEntity> AuditLogs { get; set; }
 
-        public async Task UpdateUserQuotaAsync(string userId, long sizeChange)
-        {
-            await Users
-                .Where(u => u.Id == userId)
-                .ExecuteUpdateAsync(u => u.SetProperty(x => x.UsedQuotaBytes, x => x.UsedQuotaBytes + sizeChange));
-        }
-
         protected override void OnModelCreating(ModelBuilder builder)
         {
             base.OnModelCreating(builder);

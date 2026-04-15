@@ -12,7 +12,9 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
+using Stripe;
 using System.Text;
+using SubscriptionService = EasyDisk.Infrastructure.Services.SubscriptionService;
 
 namespace EasyDisk.API
 {
@@ -93,15 +95,21 @@ namespace EasyDisk.API
             builder.Services.AddScoped<ICurrentUserService, CurrentUserService>();
             builder.Services.AddScoped<IFolderService, FolderService>();
             builder.Services.AddScoped<IFileStorageService, FileStorageService>();
-            builder.Services.AddScoped<IFileService, FileService>();
+            builder.Services.AddScoped<IFileService, Infrastructure.Services.FileService>();
             builder.Services.AddScoped<IFolderRepository, FolderRepository>();
             builder.Services.AddScoped<IFileRepository, FileRepository>();
             builder.Services.AddScoped<ITagRepository, TagRepository>();
             builder.Services.AddScoped<ITagService, TagService>();
+            builder.Services.AddScoped<IUserRepository, UserRepository>();
+            builder.Services.AddScoped<ISubscriptionService, SubscriptionService>();
+            builder.Services.AddScoped<IPaymentService, PaymentService>();
+
 
             builder.Services.AddHttpContextAccessor();
 
             var app = builder.Build();
+
+            Stripe.StripeConfiguration.ApiKey = builder.Configuration["Stripe:SecretKey"];
 
             using (var scope = app.Services.CreateScope())
             {
