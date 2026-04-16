@@ -6,9 +6,8 @@ using System.Threading.Tasks;
 
 namespace EasyDisk.Application.Interfaces
 {
-    public interface ISubscriptionService
+    public interface IEmailSenderService
     {
-        Task<string> CreateCheckoutSessionAsync(string userId, string planName);
-        Task CancelSubscriptionAsync(string userId);
+        Task SendEmailAsync(string toEmail, string subject, string htmlMessage);
     }
 }

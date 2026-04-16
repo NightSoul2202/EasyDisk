@@ -22,6 +22,7 @@ namespace EasyDisk.API.Controllers
         public async Task<IActionResult> CreateTag([FromBody] CreateTagDto dto)
         {
             var tag = await _tagService.CreateTagAsync(dto);
+
             return Created("", tag);
         }
 
@@ -30,6 +31,7 @@ namespace EasyDisk.API.Controllers
         public async Task<IActionResult> AttachTag(int tagId, Guid fileId)
         {
             await _tagService.AttachTagToFileAsync(fileId, tagId);
+
             return Ok(new { message = "Tag attached successfully." });
         }
 
@@ -38,6 +40,7 @@ namespace EasyDisk.API.Controllers
         public async Task<IActionResult> GetUserTags()
         {
             var tags = await _tagService.GetUserTagsAsync();
+
             return Ok(tags);
         }
 
@@ -46,6 +49,7 @@ namespace EasyDisk.API.Controllers
         public async Task<IActionResult> UpdateTag(int tagId, [FromBody] UpdateTagDto dto)
         {
             var tag = await _tagService.UpdateTagAsync(tagId, dto);
+
             return Ok(tag);
         }
 
@@ -54,6 +58,7 @@ namespace EasyDisk.API.Controllers
         public async Task<IActionResult> DetachTag(int tagId, Guid fileId)
         {
             await _tagService.DetachTagFromFileAsync(fileId, tagId);
+
             return NoContent();
         }
 
@@ -62,6 +67,7 @@ namespace EasyDisk.API.Controllers
         public async Task<IActionResult> DeleteTag(int tagId)
         {
             await _tagService.DeleteTagAsync(tagId);
+
             return NoContent();
         }
     }

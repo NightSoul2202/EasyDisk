@@ -18,5 +18,7 @@ namespace EasyDisk.Infrastructure.Identity.Entities
         public string? StripeSubscriptionId { get; set; }
 
         public DateTime? SubscriptionEndDate { get; set; }
+
+        public DateTime? BirthDate { get; set; }
     }
 }

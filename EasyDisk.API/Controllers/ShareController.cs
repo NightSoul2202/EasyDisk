@@ -22,6 +22,7 @@ namespace EasyDisk.API.Controllers
         public async Task<IActionResult> CreateShareLink([FromBody] CreateShareLinkDto dto)
         {
             var shareLink = await _shareLinkService.CreateShareLinkAsync(dto);
+
             return Ok(shareLink);
         }
 
@@ -31,6 +32,7 @@ namespace EasyDisk.API.Controllers
         public async Task<IActionResult> DownloadPublic(string token, [FromQuery] string? password = null)
         {
             var (fileStream, contentType, fileName) = await _shareLinkService.DownloadByTokenAsync(token, password);
+
             return File(fileStream, contentType, fileName);
         }
     }

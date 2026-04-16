@@ -20,6 +20,7 @@ namespace EasyDisk.API.Controllers
         public async Task<IActionResult> GetAllUsers()
         {
             var users = await _adminService.GetAllUsersAsync();
+
             return Ok(users);
         }
 
@@ -27,6 +28,7 @@ namespace EasyDisk.API.Controllers
         public async Task<IActionResult> ToggleUserBan(string userId)
         {
             await _adminService.ToggleUserBanAsync(userId);
+
             return Ok(new { message = "User ban status toggled successfully." });
         }
     }

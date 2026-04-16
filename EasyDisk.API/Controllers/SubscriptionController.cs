@@ -29,5 +29,16 @@ namespace EasyDisk.API.Controllers
 
             return Ok(new { Url = sessionUrl });
         }
+
+        [HttpPost]
+        [Route("cancel")]
+        public async Task<IActionResult> CancelSubscription()
+        {
+            var userId = _currentUserService.UserId ?? throw new Exception("User must be authenticated to cancel a subscription.");
+
+            await _subscriptionService.CancelSubscriptionAsync(userId);
+
+            return Ok(new { message = "Subscription cancelled successfully." });
+        }
     }
 }

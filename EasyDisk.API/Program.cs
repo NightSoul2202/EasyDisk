@@ -103,6 +103,8 @@ namespace EasyDisk.API
             builder.Services.AddScoped<IUserRepository, UserRepository>();
             builder.Services.AddScoped<ISubscriptionService, SubscriptionService>();
             builder.Services.AddScoped<IPaymentService, PaymentService>();
+            builder.Services.AddScoped<IProfileService, ProfileService>();
+            builder.Services.AddScoped<IEmailSenderService, EmailSenderService>();
 
 
             builder.Services.AddHttpContextAccessor();

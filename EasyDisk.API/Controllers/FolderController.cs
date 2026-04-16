@@ -22,6 +22,7 @@ namespace EasyDisk.API.Controllers
         public async Task<IActionResult> CreateFolder([FromBody] CreateFolderDto createFolderDto)
         {
             var result = await _folderService.CreateFolderAsync(createFolderDto);
+
             return Created("", result);
         }
 
@@ -30,6 +31,7 @@ namespace EasyDisk.API.Controllers
         public async Task<IActionResult> GetFolders([FromQuery] int? parentFolderId = null)
         {
             var result = await _folderService.GetFoldersAsync(parentFolderId);
+
             return Ok(result);
         }
 
@@ -38,6 +40,7 @@ namespace EasyDisk.API.Controllers
         public async Task<IActionResult> UpdateFolder(int folderId, [FromBody] UpdateFolderDto updateFolderDto)
         {
             var result = await _folderService.UpdateFolderAsync(folderId, updateFolderDto);
+
             return Ok(result);
         }
 
@@ -46,6 +49,7 @@ namespace EasyDisk.API.Controllers
         public async Task<IActionResult> SoftDeleteFolder(int folderId)
         {
             await _folderService.SoftDeleteFolderAsync(folderId);
+
             return NoContent();
         }
 
@@ -54,6 +58,7 @@ namespace EasyDisk.API.Controllers
         public async Task<IActionResult> HardDeleteFolder(int folderId)
         {
             await _folderService.HardDeleteFolderAsync(folderId);
+
             return NoContent();
         }
     }

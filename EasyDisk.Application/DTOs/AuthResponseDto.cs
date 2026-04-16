@@ -11,6 +11,6 @@ namespace EasyDisk.Application.DTOs
         public string? Token { get; set; }
         public string? Email { get; set; }
         public string? UserId { get; set; }
-        public string? ErrorMessage { get; set; }
+        public bool RequiresTwoFactor { get; set; }
     }
 }

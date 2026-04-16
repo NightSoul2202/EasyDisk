@@ -19,12 +19,15 @@ namespace EasyDisk.API.Controllers
         public async Task<IActionResult> StripeWebhook()
         {
             var json = await new StreamReader(HttpContext.Request.Body).ReadToEndAsync();
+
             var signature = Request.Headers["Stripe-Signature"].ToString();
             if (string.IsNullOrEmpty(signature))
             {
                 return BadRequest("Missing Stripe signature");
             }
+
             await _paymentService.ProcessWebhookAsync(json, signature);
+
             return Ok();
         }
     }

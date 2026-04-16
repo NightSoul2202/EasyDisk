@@ -1,18 +1,20 @@
-﻿using System;
+﻿using EasyDisk.Application.DTOs;
+using EasyDisk.Application.Exceptions;
+using EasyDisk.Application.Extensions;
+using EasyDisk.Application.Interfaces;
+using EasyDisk.Infrastructure.Identity.Entities;
+using EasyDisk.Infrastructure.Services;
+using Google.Apis.Auth;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.Extensions.Configuration;
+using Microsoft.IdentityModel.Tokens;
+using System;
 using System.Collections.Generic;
 using System.IdentityModel.Tokens.Jwt;
 using System.Linq;
 using System.Security.Claims;
 using System.Text;
 using System.Threading.Tasks;
-using EasyDisk.Application.DTOs;
-using EasyDisk.Application.Interfaces;
-using EasyDisk.Infrastructure.Identity.Entities;
-using Microsoft.AspNetCore.Identity;
-using Microsoft.Extensions.Configuration;
-using Microsoft.IdentityModel.Tokens;
-using Google.Apis.Auth;
-using EasyDisk.Application.Exceptions;
 
 namespace EasyDisk.Infrastructure.Identity.Services
 {
@@ -20,11 +22,14 @@ namespace EasyDisk.Infrastructure.Identity.Services
     {
         private readonly UserManager<ApplicationUser> _userManager;
         private readonly IConfiguration _configuration;
-        
-        public AuthService(UserManager<ApplicationUser> userManager, IConfiguration configuration)
+        private readonly IEmailSenderService _emailSenderService;
+
+
+        public AuthService(UserManager<ApplicationUser> userManager, IConfiguration configuration, IEmailSenderService emailSenderService)
         {
             _userManager = userManager;
             _configuration = configuration;
+            _emailSenderService = emailSenderService;
         }
 
         public async Task<AuthResponseDto> LoginAsync(LoginDto loginDto)
@@ -35,6 +40,19 @@ namespace EasyDisk.Infrastructure.Identity.Services
             {
                 throw new ValidationException("Invalid email or password.");
             }
+
+            if (user.TwoFactorEnabled)
+            {
+                if (string.IsNullOrEmpty(loginDto.Code))
+                {
+                    return new AuthResponseDto
+                    {
+                        RequiresTwoFactor = true,
+                    };
+                }
+
+                await ProcessTwoFactorAuth(user, loginDto.Code);
+            }
             
             var token = await GenerateJwtTokenAsync(user);
 
@@ -42,7 +60,8 @@ namespace EasyDisk.Infrastructure.Identity.Services
             {
                 Token = token,
                 Email = user.Email,
-                UserId = user.Id
+                UserId = user.Id,
+                RequiresTwoFactor = false
             };
         }
 
@@ -92,6 +111,72 @@ namespace EasyDisk.Infrastructure.Identity.Services
             }
         }
 
+        public async Task ConfirmEmailAsync(string userId, string token)
+        {
+            if (string.IsNullOrWhiteSpace(userId) || string.IsNullOrWhiteSpace(token))
+            {
+                throw new ValidationException("Wrong confirmation link.");
+            }
+
+            var user = await _userManager.FindByIdAsync(userId).EnsureExistsAsync(() => "User not found");
+
+            var result = await _userManager.ConfirmEmailAsync(user, token);
+
+            if (!result.Succeeded)
+            {
+                throw new ValidationException("Email verification failed. The link may be outdated or has already been used.");
+            }
+        }
+
+        public async Task<TwoFactorSetupResponseDto> Get2FaSetupInfoAsync(string userId)
+        {
+            var user = await _userManager.FindByIdAsync(userId) ?? throw new NotFoundException("User not found.");
+
+            var unformattedKey = await _userManager.GetAuthenticatorKeyAsync(user);
+            if (string.IsNullOrEmpty(unformattedKey))
+            {
+                await _userManager.ResetAuthenticatorKeyAsync(user);
+                unformattedKey = await _userManager.GetAuthenticatorKeyAsync(user);
+            }
+
+            var email = user.Email ?? throw new ValidationException("User email is required for 2FA setup.");
+
+            var authenticatorUri = $"otpauth://totp/EasyDisk:{email}?secret={unformattedKey}&issuer=EasyDisk&digits=6";
+
+            return new TwoFactorSetupResponseDto
+            {
+                SharedKey = unformattedKey!,
+                AuthenticatorUri = authenticatorUri
+            };
+        }
+
+        public async Task Confirm2FaSetupAsync(string userId, string code)
+        {
+            var user = await _userManager.FindByIdAsync(userId) ?? throw new NotFoundException("User not found.");
+
+            var isCodeValid = await _userManager.VerifyTwoFactorTokenAsync(
+                user,
+                _userManager.Options.Tokens.AuthenticatorTokenProvider,
+                code).ValidateCodeAsync(() => "Invalid 2FA code.");
+
+            await _userManager.SetTwoFactorEnabledAsync(user, true);
+        }
+
+        public async Task Disable2FaAsync(string userId)
+        {
+            var user = await _userManager.FindByIdAsync(userId) ?? throw new NotFoundException("User not found.");
+
+            await _userManager.SetTwoFactorEnabledAsync(user, false);   
+        }
+
+        private async Task ProcessTwoFactorAuth(ApplicationUser user, string code)
+        {
+            var isCodeValid = await _userManager.VerifyTwoFactorTokenAsync(
+                user,
+                _userManager.Options.Tokens.AuthenticatorTokenProvider,
+                code).ValidateCodeAsync(() => "Wrong 2FA code.");
+        }
+
         private async Task<string> GenerateJwtTokenAsync(ApplicationUser user)
         {
             var authClaims = new List<Claim>
@@ -138,8 +223,30 @@ namespace EasyDisk.Infrastructure.Identity.Services
                 var errors = string.Join("; ", result.Errors.Select(e => e.Description));
                 throw new ValidationException($"User creation failed: {errors}");
             }
+
+            await ProcessConfirmationEmail(user);
+
             await _userManager.AddToRoleAsync(user, "User");
+
             return user;
+        }
+
+        private async Task ProcessConfirmationEmail(ApplicationUser user)
+        {
+            var emailToken = await _userManager.GenerateEmailConfirmationTokenAsync(user);
+
+            var encodedToken = System.Uri.EscapeDataString(emailToken);
+            // Замінити на інше посилання коли буде вже фронтенд, який буде обробляти підтвердження
+            var confirmationLink = $"http://localhost:5173/confirm-email?userId={user.Id}&token={encodedToken}";
+
+            var emailBody = $@"
+                <h2>Welcome to EasyDisk!</h2>
+                <p>To complete registration and activate your cloud storage, please confirm your email address by following the link below:</p>
+                <a href='{confirmationLink}' style='padding: 10px 20px; background-color: #007bff; color: white; text-decoration: none; border-radius: 5px; display: inline-block;'>Confirm Email</a>
+                <p>If the button doesn't work, copy this link into your browser: {confirmationLink}</p>
+            ";
+
+            await _emailSenderService.SendEmailAsync(user.Email!, "Registation confirmation - EasyDisk", emailBody);
         }
     }
 }

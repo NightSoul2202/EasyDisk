@@ -25,12 +25,15 @@ namespace EasyDisk.API.Controllers
             {
                 return BadRequest(new { message = "Chunk file is required." });
             }
+
             using var stream = chunk.OpenReadStream();
+
             var result = await _fileService.UploadChunkAsync(uploadChunkDto, stream);
             if (result == null)
             {
                 return Created("", result);
             }
+
             return Ok(new { message = $"Chunk {uploadChunkDto.ChunkIndex + 1} from {uploadChunkDto.TotalChunks} successful uploaded." });
         }
 
@@ -39,6 +42,7 @@ namespace EasyDisk.API.Controllers
         public async Task<IActionResult> Download(Guid id)
         {
             var (fileStream, contentType, fileName) = await _fileService.DownloadFileAsync(id);
+
             return File(fileStream, contentType, fileName);
         }
 
@@ -47,6 +51,7 @@ namespace EasyDisk.API.Controllers
         public async Task<IActionResult> GetFiles([FromQuery] int? folderId = null)
         {
             var files = await _fileService.GetFilesAsync(folderId);
+
             return Ok(files);
         }
 
@@ -55,6 +60,7 @@ namespace EasyDisk.API.Controllers
         public async Task<IActionResult> GetFileVersions(Guid id)
         {
             var versions = await _fileService.GetFileVersionsAsync(id);
+
             return Ok(versions);
         }
 
@@ -63,6 +69,7 @@ namespace EasyDisk.API.Controllers
         public async Task<IActionResult> SearchFiles([FromQuery] FileSearchParametersDto dto)
         {
             var files = await _fileService.SearchFilesAsync(dto);
+
             return Ok(files);
         }
 
@@ -71,6 +78,7 @@ namespace EasyDisk.API.Controllers
         public async Task<IActionResult> UpdateFile(Guid fileId, [FromBody] UpdateFileDto updateFileDto)
         {
             var result = await _fileService.UpdateFileAsync(fileId, updateFileDto);
+
             return Ok(result);
         }
 
@@ -79,6 +87,7 @@ namespace EasyDisk.API.Controllers
         public async Task<IActionResult> CancelUpload(string uploadId)
         {
             await _fileService.CancelUploadAsync(uploadId);
+
             return NoContent();
         }
 
@@ -87,6 +96,7 @@ namespace EasyDisk.API.Controllers
         public async Task<IActionResult> SoftDeleteFile(Guid fileId)
         {
             await _fileService.SoftDeleteFileAsync(fileId);
+
             return NoContent();
         }
 
@@ -95,6 +105,7 @@ namespace EasyDisk.API.Controllers
         public async Task<IActionResult> HardDeleteFile(Guid fileId)
         {
             await _fileService.HardDeleteFileAsync(fileId);
+
             return NoContent();
         }
     }

@@ -10,10 +10,14 @@ namespace EasyDisk.API.Middlewares
     public class ErrorHandlerMiddleware
     {
         private readonly RequestDelegate _next;
-        public ErrorHandlerMiddleware(RequestDelegate next)
+        private readonly ILogger<ErrorHandlerMiddleware> _logger;
+
+        public ErrorHandlerMiddleware(RequestDelegate next, ILogger<ErrorHandlerMiddleware> logger)
         {
             _next = next;
+            _logger = logger;
         }
+
         public async Task InvokeAsync(HttpContext context)
         {
             try
@@ -34,6 +38,11 @@ namespace EasyDisk.API.Middlewares
                     ApiException => (int)HttpStatusCode.InternalServerError,
                     _ => (int)HttpStatusCode.InternalServerError
                 };
+
+                if (response.StatusCode == (int)HttpStatusCode.InternalServerError)
+                {
+                    _logger.LogError(error, "Unexpected server error: {Message}", error.Message);
+                }
 
                 var result = JsonSerializer.Serialize(new { message = error?.Message });
                 await response.WriteAsync(result);

@@ -65,5 +65,31 @@ namespace EasyDisk.Infrastructure.Services
 
             return session.Url;
         }
+
+        public async Task CancelSubscriptionAsync(string userId)
+        {
+            var user = await _userManager.FindByIdAsync(userId).EnsureExistsAsync(() => "User not found");
+
+            if (string.IsNullOrEmpty(user.StripeSubscriptionId))
+            {
+                throw new ValidationException("No active subscription found");
+            }
+
+            var stripeSubscriptionService = new Stripe.SubscriptionService();
+
+            var options = new Stripe.SubscriptionUpdateOptions
+            {
+                CancelAtPeriodEnd = true
+            };
+
+            try
+            {
+                await stripeSubscriptionService.UpdateAsync(user.StripeSubscriptionId, options);
+            }
+            catch (Stripe.StripeException ex)
+            {
+                throw new ValidationException($"Failed to cancel subscription: {ex.Message}");
+            }
+        }
     }
 }

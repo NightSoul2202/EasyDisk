@@ -1,5 +1,6 @@
 ﻿using EasyDisk.Application.DTOs;
 using EasyDisk.Application.Interfaces;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 
 namespace EasyDisk.API.Controllers
@@ -37,6 +38,15 @@ namespace EasyDisk.API.Controllers
             var result = await _authService.GoogleLoginAsync(googleLoginDto);
 
             return Ok(result);
+        }
+
+        [HttpGet]
+        [Route("confirm-email")]
+        public async Task<IActionResult> ConfirmEmail([FromBody] ConfirmEmailDto dto)
+        {
+            await _authService.ConfirmEmailAsync(dto.UserId, dto.Token);
+
+            return Ok(new { message = "Email successfully verified." });
         }
     }
 }

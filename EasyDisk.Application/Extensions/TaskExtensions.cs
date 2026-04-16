@@ -30,6 +30,16 @@ namespace EasyDisk.Application.Extensions
             return result;
         }
 
+        public static async Task<bool> ValidateCodeAsync(this Task<bool> task, Func<string> validateMessage)
+        {
+            var isTrue = await task;
+            if (!isTrue)
+            {
+                throw new ValidationException(validateMessage());
+            }
+            return isTrue;
+        }
+
         public static async Task ValidateExistsAsync(this Task<bool> task, Func<string> notFoundMessage)
         {
             var isTrue = await task;
