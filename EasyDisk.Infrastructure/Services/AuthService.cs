@@ -80,35 +80,28 @@ namespace EasyDisk.Infrastructure.Identity.Services
 
         public async Task<AuthResponseDto> GoogleLoginAsync(GoogleLoginDto googleLoginDto)
         {
-            try
+            var settings = new GoogleJsonWebSignature.ValidationSettings()
             {
-                var settings = new GoogleJsonWebSignature.ValidationSettings()
-                {
-                    Audience = new List<string>() { _configuration["Authentication:Google:ClientId"]! }
-                };
+                Audience = new List<string>() { _configuration["Authentication:Google:ClientId"]! }
+            };
 
-                var payload = await GoogleJsonWebSignature.ValidateAsync(googleLoginDto.IdToken, settings);
+            var payload = await GoogleJsonWebSignature.ValidateAsync(googleLoginDto.IdToken, settings);
 
-                var user = await _userManager.FindByEmailAsync(payload.Email);
+            var user = await _userManager.FindByEmailAsync(payload.Email);
 
-                if (user == null)
-                {
-                    user = await CreateNewUserAsync(payload.Email);
-                }
-
-                var token = await GenerateJwtTokenAsync(user);
-
-                return new AuthResponseDto
-                {
-                    Token = token,
-                    Email = user.Email,
-                    UserId = user.Id
-                };
-            }
-            catch (InvalidJwtException)
+            if (user == null)
             {
-               throw new ValidationException("Invalid Google token.");
+                user = await CreateNewUserAsync(payload.Email);
             }
+
+            var token = await GenerateJwtTokenAsync(user);
+
+            return new AuthResponseDto
+            {
+                Token = token,
+                Email = user.Email,
+                UserId = user.Id
+            };
         }
 
         public async Task ConfirmEmailAsync(string userId, string token)
@@ -125,6 +118,44 @@ namespace EasyDisk.Infrastructure.Identity.Services
             if (!result.Succeeded)
             {
                 throw new ValidationException("Email verification failed. The link may be outdated or has already been used.");
+            }
+        }
+
+        public async Task ForgotPasswordAsync(ForgotPasswordDto dto)
+        {
+            var user = await _userManager.FindByEmailAsync(dto.Email);
+
+            if (user == null || !(await _userManager.IsEmailConfirmedAsync(user))) 
+            { 
+                return;
+            }
+
+            var resetToken = await _userManager.GeneratePasswordResetTokenAsync(user);
+            var encodedToken = System.Uri.EscapeDataString(resetToken);
+
+            var frontendUrl = "http://localhost:5173";
+            var resetLink = $"{frontendUrl}/reset-password?email={user.Email}&token={encodedToken}";
+
+            var emailBody = $@"
+                <h2>Password Recovery - EasyDisk</h2>
+                <p>You received this email because a password reset request for your account has been received.</p>
+                <p>To set a new password, click on the button below:</p>
+                <a href='{resetLink}' style='padding: 10px 20px; background-color: #dc3545; color: white; text-decoration: none; border-radius: 5px; display: inline-block;'>Reset password</a>
+                <p>If you have not made this request, simply ignore this email.</p>
+            ";
+
+            await _emailSenderService.SendEmailAsync(user.Email!, "Password reset - EasyDisk", emailBody);
+        }
+
+        public async Task ResetPasswordAsync(ResetPasswordDto dto)
+        {
+            var user = await _userManager.FindByEmailAsync(dto.Email) ?? throw new ValidationException("Invalid password recovery request.");
+
+            var result = await _userManager.ResetPasswordAsync(user, dto.Token, dto.NewPassword);
+
+            if (!result.Succeeded)
+            {
+                throw new ValidationException($"Failed to reset password. The link may be out of date.");
             }
         }
 

@@ -28,29 +28,22 @@ namespace EasyDisk.Infrastructure.Services
 
         public async Task ProcessWebhookAsync(string json, string signature)
         {
-            try
-            {
-                var stripeEvent = Stripe.EventUtility.ConstructEvent(json, signature, _stripeWebhookSecret);
+            var stripeEvent = Stripe.EventUtility.ConstructEvent(json, signature, _stripeWebhookSecret);
 
-                switch (stripeEvent.Type)
-                {
-                    case "checkout.session.completed":
-                        await HandleCheckoutSessionCompleted(stripeEvent.Data.Object as Session);
-                        break;
-                    case "invoice.paid":
-                        await HandleInvoicePaid(stripeEvent.Data.Object as Invoice);
-                        break;
-                    case "customer.subscription.deleted":
-                        await HandleSubscriptionDeleted(stripeEvent.Data.Object as Subscription);
-                        break;
-                    default:
-                        _logger.LogInformation("Unhandled Stripe event type: {EventType}", stripeEvent.Type);
-                        break;
-                }
-            }
-            catch (StripeException ex)
+            switch (stripeEvent.Type)
             {
-                _logger.LogError(ex, "Stripe webhook signature verification failed.");
+                case "checkout.session.completed":
+                    await HandleCheckoutSessionCompleted(stripeEvent.Data.Object as Session);
+                    break;
+                case "invoice.paid":
+                    await HandleInvoicePaid(stripeEvent.Data.Object as Invoice);
+                    break;
+                case "customer.subscription.deleted":
+                    await HandleSubscriptionDeleted(stripeEvent.Data.Object as Subscription);
+                    break;
+                default:
+                    _logger.LogInformation("Unhandled Stripe event type: {EventType}", stripeEvent.Type);
+                    break;
             }
         }
 

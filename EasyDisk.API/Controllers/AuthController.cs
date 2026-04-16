@@ -40,6 +40,24 @@ namespace EasyDisk.API.Controllers
             return Ok(result);
         }
 
+        [HttpPost]
+        [Route("forgot-password")]
+        public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordDto dto)
+        {
+            await _authService.ForgotPasswordAsync(dto);
+
+            return Ok(new { message = "If an account with that address exists, we've sent it an email with instructions." });
+        }
+
+        [HttpPost]
+        [Route("reset-password")]
+        public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordDto dto)
+        {
+            await _authService.ResetPasswordAsync(dto);
+
+            return Ok(new { message = "Password changed successfully." });
+        }
+
         [HttpGet]
         [Route("confirm-email")]
         public async Task<IActionResult> ConfirmEmail([FromBody] ConfirmEmailDto dto)

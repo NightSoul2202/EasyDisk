@@ -13,6 +13,8 @@ namespace EasyDisk.Application.Interfaces
         Task<AuthResponseDto> LoginAsync(LoginDto loginDto);
         Task<AuthResponseDto> GoogleLoginAsync(GoogleLoginDto googleLoginDto);
         Task ConfirmEmailAsync(string userId, string token);
+        Task ForgotPasswordAsync(ForgotPasswordDto dto);
+        Task ResetPasswordAsync(ResetPasswordDto dto);
         Task<TwoFactorSetupResponseDto> Get2FaSetupInfoAsync(string userId);
         Task Confirm2FaSetupAsync(string userId, string code);
         Task Disable2FaAsync(string userId);

@@ -24,31 +24,23 @@ namespace EasyDisk.Infrastructure.Services
 
         public async Task SendEmailAsync(string toEmail, string subject, string htmlMessage)
         {
-            try
-            {
-                var email = new MimeMessage();
-                email.From.Add(new MailboxAddress(_configuration["EmailSettings:SenderName"], _configuration["EmailSettings:SenderEmail"]!));
+            var email = new MimeMessage();
+            email.From.Add(new MailboxAddress(_configuration["EmailSettings:SenderName"], _configuration["EmailSettings:SenderEmail"]!));
+            email.To.Add(MailboxAddress.Parse(toEmail));
+            email.Subject = subject;
 
-                email.To.Add(MailboxAddress.Parse(toEmail));
-                email.Subject = subject;
+            var builder = new BodyBuilder { HtmlBody = htmlMessage };
+            email.Body = builder.ToMessageBody();
 
-                var builder = new BodyBuilder { HtmlBody = htmlMessage };
-                email.Body = builder.ToMessageBody();
+            using var smtp = new MailKit.Net.Smtp.SmtpClient();
 
-                using var smtp = new MailKit.Net.Smtp.SmtpClient();
+            await smtp.ConnectAsync(_configuration["SmtpSettings:Server"]!, int.Parse(_configuration["SmtpSettings:Port"]!), SecureSocketOptions.StartTls);
+            await smtp.AuthenticateAsync(_configuration["SmtpSettings:SenderEmail"]!, _configuration["SmtpSettings:Password"]!);
 
-                await smtp.ConnectAsync(_configuration["SmtpSettings:Server"]!, int.Parse(_configuration["SmtpSettings:Port"]!), SecureSocketOptions.StartTls);
-                await smtp.AuthenticateAsync(_configuration["SmtpSettings:SenderEmail"]!, _configuration["SmtpSettings:Password"]!);
+            await smtp.SendAsync(email);
+            await smtp.DisconnectAsync(true);
 
-                await smtp.SendAsync(email);
-                await smtp.DisconnectAsync(true);
-
-                _logger.LogInformation("Email sent to {Email}", toEmail);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to send email to {Email}", toEmail);
-            }
+            _logger.LogInformation("Email sent to {Email}", toEmail);
         }
     }
 }
