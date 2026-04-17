@@ -23,13 +23,14 @@ namespace EasyDisk.Infrastructure.Identity.Services
         private readonly UserManager<ApplicationUser> _userManager;
         private readonly IConfiguration _configuration;
         private readonly IEmailSenderService _emailSenderService;
+        private readonly IAuditService _auditService;
 
-
-        public AuthService(UserManager<ApplicationUser> userManager, IConfiguration configuration, IEmailSenderService emailSenderService)
+        public AuthService(UserManager<ApplicationUser> userManager, IConfiguration configuration, IEmailSenderService emailSenderService, IAuditService auditService)
         {
             _userManager = userManager;
             _configuration = configuration;
             _emailSenderService = emailSenderService;
+            _auditService = auditService;
         }
 
         public async Task<AuthResponseDto> LoginAsync(LoginDto loginDto)
@@ -38,6 +39,14 @@ namespace EasyDisk.Infrastructure.Identity.Services
 
             if (user == null || !await _userManager.CheckPasswordAsync(user, loginDto.Password))
             {
+                await _auditService.LogAsync(
+                    action: "User.LoginFailed",
+                    entityType: "User",
+                    entityId: user?.Id,
+                    details: new { AttemptedEmail = loginDto.Email, Reason = "Invalid credentials" },
+                    isSuccess: false
+                );
+
                 throw new ValidationException("Invalid email or password.");
             }
 
@@ -56,6 +65,14 @@ namespace EasyDisk.Infrastructure.Identity.Services
             
             var token = await GenerateJwtTokenAsync(user);
 
+            await _auditService.LogAsync(
+                action: "User.Login",
+                entityType: "User",
+                entityId: user.Id,
+                details: new { Email = user.Email },
+                isSuccess: true
+            );
+
             return new AuthResponseDto
             {
                 Token = token,
@@ -70,6 +87,14 @@ namespace EasyDisk.Infrastructure.Identity.Services
             var userExists = await _userManager.FindByEmailAsync(registerDto.Email);
             if (userExists != null)
             {
+                await _auditService.LogAsync(
+                    action: "User.RegisterFailed",
+                    entityType: "User",
+                    entityId: userExists?.Id,
+                    details: new { AttemptedEmail = registerDto.Email, Reason = "Invalid credentials" },
+                    isSuccess: false
+                );
+
                 throw new ValidationException($"User with email {registerDto.Email} already exists.");
             }
 
@@ -96,6 +121,14 @@ namespace EasyDisk.Infrastructure.Identity.Services
 
             var token = await GenerateJwtTokenAsync(user);
 
+            await _auditService.LogAsync(
+                action: "User.GoogleLogin",
+                entityType: "User",
+                entityId: user.Id,
+                details: new { Email = user.Email },
+                isSuccess: true
+            );
+
             return new AuthResponseDto
             {
                 Token = token,
@@ -117,8 +150,24 @@ namespace EasyDisk.Infrastructure.Identity.Services
 
             if (!result.Succeeded)
             {
+                await _auditService.LogAsync(
+                    action: "User.EmailConfirmFailed",
+                    entityType: "User",
+                    entityId: user.Id,
+                    details: new { Email = user.Email },
+                    isSuccess: false
+                );
+
                 throw new ValidationException("Email verification failed. The link may be outdated or has already been used.");
             }
+
+            await _auditService.LogAsync(
+                action: "User.EmailConfirmed",
+                entityType: "User",
+                entityId: user.Id,
+                details: new { Email = user.Email },
+                isSuccess: true
+            );
         }
 
         public async Task ForgotPasswordAsync(ForgotPasswordDto dto)
@@ -126,7 +175,15 @@ namespace EasyDisk.Infrastructure.Identity.Services
             var user = await _userManager.FindByEmailAsync(dto.Email);
 
             if (user == null || !(await _userManager.IsEmailConfirmedAsync(user))) 
-            { 
+            {
+                await _auditService.LogAsync(
+                    action: "User.PasswordResetRequested",
+                    entityType: "User",
+                    entityId: null,
+                    details: new { AttemptedEmail = dto.Email, Reason = "User not found or email not confirmed" },
+                    isSuccess: false
+                );
+
                 return;
             }
 
@@ -145,6 +202,14 @@ namespace EasyDisk.Infrastructure.Identity.Services
             ";
 
             await _emailSenderService.SendEmailAsync(user.Email!, "Password reset - EasyDisk", emailBody);
+
+            await _auditService.LogAsync(
+                action: "User.PasswordResetRequested",
+                entityType: "User",
+                entityId: user.Id,
+                details: new { Email = user.Email },
+                isSuccess: true
+            );
         }
 
         public async Task ResetPasswordAsync(ResetPasswordDto dto)
@@ -155,8 +220,24 @@ namespace EasyDisk.Infrastructure.Identity.Services
 
             if (!result.Succeeded)
             {
+                await _auditService.LogAsync(
+                    action: "User.PasswordResetFailed",
+                    entityType: "User",
+                    entityId: user.Id,
+                    details: new { Email = user.Email },
+                    isSuccess: false
+                );
+
                 throw new ValidationException($"Failed to reset password. The link may be out of date.");
             }
+
+            await _auditService.LogAsync(
+                action: "User.PasswordReset",
+                entityType: "User",
+                entityId: user.Id,
+                details: new { Email = user.Email },
+                isSuccess: true
+            );
         }
 
         public async Task<TwoFactorSetupResponseDto> Get2FaSetupInfoAsync(string userId)
@@ -251,15 +332,31 @@ namespace EasyDisk.Infrastructure.Identity.Services
 
             if (!result.Succeeded)
             {
+                await _auditService.LogAsync(
+                    action: "User.CreateAccountFailed",
+                    entityType: "User",
+                    entityId: user?.Id,
+                    details: new { AttemptedEmail = email, Reason = "Invalid credentials" },
+                    isSuccess: false
+                );
+
                 var errors = string.Join("; ", result.Errors.Select(e => e.Description));
                 throw new ValidationException($"User creation failed: {errors}");
             }
 
-            await ProcessConfirmationEmail(user);
+            await _auditService.LogAsync(
+                action: "User.AccountCreated",
+                entityType: "User",
+                entityId: user?.Id,
+                details: new { Email = user?.Email },
+                isSuccess: true
+            );
 
-            await _userManager.AddToRoleAsync(user, "User");
+            await ProcessConfirmationEmail(user!);
 
-            return user;
+            await _userManager.AddToRoleAsync(user!, "User");
+
+            return user!;
         }
 
         private async Task ProcessConfirmationEmail(ApplicationUser user)

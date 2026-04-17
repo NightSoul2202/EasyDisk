@@ -4,9 +4,9 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace EasyDisk.Domain.Entities
+namespace EasyDisk.Application.DTOs
 {
-    public class AuditLogEntity
+    public class AuditLogDto
     {
         public Guid Id { get; set; }
         public string? UserId { get; set; }
@@ -16,7 +16,7 @@ namespace EasyDisk.Domain.Entities
         public string Details { get; set; } = string.Empty;
         public string IpAddress { get; set; } = string.Empty;
         public string UserAgent { get; set; } = string.Empty;
-        public bool IsSuccess { get; set; } = true;
-        public DateTime Timestamp { get; set; } = DateTime.UtcNow;
+        public bool IsSuccess { get; set; }
+        public DateTime Timestamp { get; set; }
     }
 }

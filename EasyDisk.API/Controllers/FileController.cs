@@ -1,4 +1,5 @@
-﻿using EasyDisk.Application.DTOs;
+﻿using EasyDisk.API.Filters;
+using EasyDisk.Application.DTOs;
 using EasyDisk.Application.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -19,6 +20,7 @@ namespace EasyDisk.API.Controllers
 
         [HttpPost]
         [Route("upload-chunk")]
+        [Audit("File.Upload", "File")]
         public async Task<IActionResult> UploadChunk([FromForm] UploadChunkDto uploadChunkDto, IFormFile chunk)
         {
             if (chunk == null || chunk.Length == 0)
@@ -74,37 +76,41 @@ namespace EasyDisk.API.Controllers
         }
 
         [HttpPut]
-        [Route("update-file/{fileId}")]
-        public async Task<IActionResult> UpdateFile(Guid fileId, [FromBody] UpdateFileDto updateFileDto)
+        [Route("update-file/{id}")]
+        [Audit("File.Update", "File")]
+        public async Task<IActionResult> UpdateFile(Guid id, [FromBody] UpdateFileDto updateFileDto)
         {
-            var result = await _fileService.UpdateFileAsync(fileId, updateFileDto);
+            var result = await _fileService.UpdateFileAsync(id, updateFileDto);
 
             return Ok(result);
         }
 
         [HttpDelete]
-        [Route("cancel-upload/{uploadId}")]
-        public async Task<IActionResult> CancelUpload(string uploadId)
+        [Route("cancel-upload/{id}")]
+        [Audit("File.CancelUpload", "File")]
+        public async Task<IActionResult> CancelUpload(string id)
         {
-            await _fileService.CancelUploadAsync(uploadId);
+            await _fileService.CancelUploadAsync(id);
 
             return NoContent();
         }
 
         [HttpDelete]
-        [Route("soft-delete-file/{fileId}")]
-        public async Task<IActionResult> SoftDeleteFile(Guid fileId)
+        [Route("soft-delete-file/{id}")]
+        [Audit("File.SoftDelete", "File")]
+        public async Task<IActionResult> SoftDeleteFile(Guid id)
         {
-            await _fileService.SoftDeleteFileAsync(fileId);
+            await _fileService.SoftDeleteFileAsync(id);
 
             return NoContent();
         }
 
         [HttpDelete]
-        [Route("hard-delete-file/{fileId}")]
-        public async Task<IActionResult> HardDeleteFile(Guid fileId)
+        [Route("hard-delete-file/{id}")]
+        [Audit("File.HardDelete", "File")]
+        public async Task<IActionResult> HardDeleteFile(Guid id)
         {
-            await _fileService.HardDeleteFileAsync(fileId);
+            await _fileService.HardDeleteFileAsync(id);
 
             return NoContent();
         }

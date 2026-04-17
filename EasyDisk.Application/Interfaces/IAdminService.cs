@@ -11,5 +11,6 @@ namespace EasyDisk.Application.Interfaces
     {
         Task<IEnumerable<UserDetailDto>> GetAllUsersAsync();
         Task ToggleUserBanAsync(string userId);
+        Task<IEnumerable<AuditLogDto>> GetAuditLogsAsync(string? userId = null);
     }
 }

@@ -1,4 +1,5 @@
-﻿using EasyDisk.Application.DTOs;
+﻿using EasyDisk.API.Filters;
+using EasyDisk.Application.DTOs;
 using EasyDisk.Application.Interfaces;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;

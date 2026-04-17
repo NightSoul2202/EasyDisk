@@ -1,4 +1,5 @@
-﻿using EasyDisk.Application.DTOs;
+﻿using EasyDisk.API.Filters;
+using EasyDisk.Application.DTOs;
 using EasyDisk.Application.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -19,6 +20,7 @@ namespace EasyDisk.API.Controllers
         [Authorize]
         [HttpPost]
         [Route("create-link")]
+        [Audit("ShareLink.Create", "Link")]
         public async Task<IActionResult> CreateShareLink([FromBody] CreateShareLinkDto dto)
         {
             var shareLink = await _shareLinkService.CreateShareLinkAsync(dto);

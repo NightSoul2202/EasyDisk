@@ -1,4 +1,5 @@
-﻿using EasyDisk.Application.DTOs;
+﻿using EasyDisk.API.Filters;
+using EasyDisk.Application.DTOs;
 using EasyDisk.Application.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -19,6 +20,7 @@ namespace EasyDisk.API.Controllers
 
         [HttpPost]
         [Route("create-tag")]
+        [Audit("Tag.Create", "Tag")]
         public async Task<IActionResult> CreateTag([FromBody] CreateTagDto dto)
         {
             var tag = await _tagService.CreateTagAsync(dto);
@@ -27,10 +29,11 @@ namespace EasyDisk.API.Controllers
         }
 
         [HttpPost]
-        [Route("{tagId}/attach/{fileId}")]
-        public async Task<IActionResult> AttachTag(int tagId, Guid fileId)
+        [Route("{id}/attach/{fileId}")]
+        [Audit("Tag.Attach", "Tag")]
+        public async Task<IActionResult> AttachTag(int id, Guid fileId)
         {
-            await _tagService.AttachTagToFileAsync(fileId, tagId);
+            await _tagService.AttachTagToFileAsync(fileId, id);
 
             return Ok(new { message = "Tag attached successfully." });
         }
@@ -45,28 +48,31 @@ namespace EasyDisk.API.Controllers
         }
 
         [HttpPut]
-        [Route("{tagId}/update-tag")]
-        public async Task<IActionResult> UpdateTag(int tagId, [FromBody] UpdateTagDto dto)
+        [Route("{id}/update-tag")]
+        [Audit("Tag.Update", "Tag")]
+        public async Task<IActionResult> UpdateTag(int id, [FromBody] UpdateTagDto dto)
         {
-            var tag = await _tagService.UpdateTagAsync(tagId, dto);
+            var tag = await _tagService.UpdateTagAsync(id, dto);
 
             return Ok(tag);
         }
 
         [HttpDelete]
-        [Route("{tagId}/detach/{fileId}")]
-        public async Task<IActionResult> DetachTag(int tagId, Guid fileId)
+        [Route("{id}/detach/{fileId}")]
+        [Audit("Tag.Detach", "Tag")]
+        public async Task<IActionResult> DetachTag(int id, Guid fileId)
         {
-            await _tagService.DetachTagFromFileAsync(fileId, tagId);
+            await _tagService.DetachTagFromFileAsync(fileId, id);
 
             return NoContent();
         }
 
         [HttpDelete]
-        [Route("{tagId}/delete-tag")]
-        public async Task<IActionResult> DeleteTag(int tagId)
+        [Route("{id}/delete-tag")]
+        [Audit("Tag.Delete", "Tag")]
+        public async Task<IActionResult> DeleteTag(int id)
         {
-            await _tagService.DeleteTagAsync(tagId);
+            await _tagService.DeleteTagAsync(id);
 
             return NoContent();
         }

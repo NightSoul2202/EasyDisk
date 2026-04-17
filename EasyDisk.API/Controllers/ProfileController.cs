@@ -1,4 +1,5 @@
-﻿using EasyDisk.Application.DTOs;
+﻿using EasyDisk.API.Filters;
+using EasyDisk.Application.DTOs;
 using EasyDisk.Application.Exceptions;
 using EasyDisk.Application.Interfaces;
 using Microsoft.AspNetCore.Authorization;
@@ -24,6 +25,7 @@ namespace EasyDisk.API.Controllers
 
         [HttpPost]
         [Route("2fa/confirm")]
+        [Audit("Profile.Confirm2FA", "User")]
         public async Task<IActionResult> ConfirmTwoFactorAuth([FromBody] TwoFactorConfirmDto confirmDto)
         {
             var userId = _currentUserService.UserId ?? throw new ValidationException("User must be authenticated to confirm two-factor authentication.");
@@ -35,6 +37,7 @@ namespace EasyDisk.API.Controllers
 
         [HttpPost]
         [Route("change-password")]
+        [Audit("Profile.ChangePassword", "User")]
         public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordDto changePasswordDto)
         {
             var userId = _currentUserService.UserId ?? throw new ValidationException("User must be authenticated to change password.");
@@ -68,6 +71,7 @@ namespace EasyDisk.API.Controllers
 
         [HttpPut]
         [Route("update-profile")]
+        [Audit("Profile.Update", "User")]
         public async Task<IActionResult> UpdateProfile([FromBody] UpdateProfileDto updateProfileDto)
         {
             var userId = _currentUserService.UserId ?? throw new ValidationException("User must be authenticated to update profile information.");
@@ -79,6 +83,7 @@ namespace EasyDisk.API.Controllers
 
         [HttpDelete]
         [Route("2fa/disable")]
+        [Audit("Profile.Disable2FA", "User")]
         public async Task<IActionResult> DisableTwoFactorAuth()
         {
             var userId = _currentUserService.UserId ?? throw new ValidationException("User must be authenticated to disable two-factor authentication.");

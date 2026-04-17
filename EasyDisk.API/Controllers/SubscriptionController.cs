@@ -1,4 +1,5 @@
-﻿using EasyDisk.Application.DTOs;
+﻿using EasyDisk.API.Filters;
+using EasyDisk.Application.DTOs;
 using EasyDisk.Application.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -21,6 +22,7 @@ namespace EasyDisk.API.Controllers
 
         [HttpPost]
         [Route("create-checkout-session")]
+        [Audit("Subscription.Create", "User")]
         public async Task<IActionResult> CreateCheckoutSession([FromQuery] CheckoutRequestDto checkoutRequest)
         {
             var userId = _currentUserService.UserId ?? throw new Exception("User must be authenticated to create a subscription.");
@@ -32,6 +34,7 @@ namespace EasyDisk.API.Controllers
 
         [HttpPost]
         [Route("cancel")]
+        [Audit("Subscription.Cancel", "User")]
         public async Task<IActionResult> CancelSubscription()
         {
             var userId = _currentUserService.UserId ?? throw new Exception("User must be authenticated to cancel a subscription.");

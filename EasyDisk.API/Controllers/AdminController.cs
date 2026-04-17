@@ -1,4 +1,5 @@
-﻿using EasyDisk.Application.Interfaces;
+﻿using EasyDisk.API.Filters;
+using EasyDisk.Application.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -16,6 +17,15 @@ namespace EasyDisk.API.Controllers
             _adminService = adminService;
         }
 
+        [HttpPost("users/{id}/toggle-ban")]
+        [Audit("Admin.ToggleBan", "User")]
+        public async Task<IActionResult> ToggleUserBan(string id)
+        {
+            await _adminService.ToggleUserBanAsync(id);
+
+            return Ok(new { message = "User ban status toggled successfully." });
+        }
+
         [HttpGet("users")]
         public async Task<IActionResult> GetAllUsers()
         {
@@ -24,12 +34,13 @@ namespace EasyDisk.API.Controllers
             return Ok(users);
         }
 
-        [HttpPost("users/{userId}/toggle-ban")]
-        public async Task<IActionResult> ToggleUserBan(string userId)
+        [HttpGet]
+        [Route("audit-logs")]
+        public async Task<IActionResult> GetAuditLogs([FromQuery] string? userId = null)
         {
-            await _adminService.ToggleUserBanAsync(userId);
+            var logs = await _adminService.GetAuditLogsAsync(userId);
 
-            return Ok(new { message = "User ban status toggled successfully." });
+            return Ok(logs);
         }
     }
 }
