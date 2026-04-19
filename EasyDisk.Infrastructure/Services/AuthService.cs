@@ -12,8 +12,10 @@ using System;
 using System.Collections.Generic;
 using System.IdentityModel.Tokens.Jwt;
 using System.Linq;
+using System.Net.Http.Headers;
 using System.Security.Claims;
 using System.Text;
+using System.Text.Json;
 using System.Threading.Tasks;
 
 namespace EasyDisk.Infrastructure.Identity.Services
@@ -105,18 +107,37 @@ namespace EasyDisk.Infrastructure.Identity.Services
 
         public async Task<AuthResponseDto> GoogleLoginAsync(GoogleLoginDto googleLoginDto)
         {
-            var settings = new GoogleJsonWebSignature.ValidationSettings()
+            using var httpClient = new HttpClient();
+            httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", googleLoginDto.AccessToken);
+
+            var response = await httpClient.GetAsync("https://www.googleapis.com/oauth2/v3/userinfo");
+
+            if (!response.IsSuccessStatusCode)
             {
-                Audience = new List<string>() { _configuration["Authentication:Google:ClientId"]! }
-            };
+                await _auditService.LogAsync(
+                    action: "User.GoogleLoginFailed",
+                    entityType: "User",
+                    entityId: null,
+                    details: new { Reason = "Invalid Google Access Token" },
+                    isSuccess: false
+                );
+                throw new ValidationException("Invalid Google token.");
+            }
 
-            var payload = await GoogleJsonWebSignature.ValidateAsync(googleLoginDto.IdToken, settings);
+            var content = await response.Content.ReadAsStringAsync();
+            using var doc = JsonDocument.Parse(content);
+            var email = doc.RootElement.GetProperty("email").GetString();
 
-            var user = await _userManager.FindByEmailAsync(payload.Email);
+            if (string.IsNullOrEmpty(email))
+            {
+                throw new ValidationException("Google account does not have an email.");
+            }
 
+            var user = await _userManager.FindByEmailAsync(email);
             if (user == null)
             {
-                user = await CreateNewUserAsync(payload.Email);
+                user = await CreateNewUserAsync(email);
+                await _userManager.UpdateAsync(user);
             }
 
             var token = await GenerateJwtTokenAsync(user);
@@ -224,7 +245,7 @@ namespace EasyDisk.Infrastructure.Identity.Services
                     action: "User.PasswordResetFailed",
                     entityType: "User",
                     entityId: user.Id,
-                    details: new { Email = user.Email },
+                    details: new { Email = user.Email, Result = result.ToString() },
                     isSuccess: false
                 );
 
@@ -281,6 +302,33 @@ namespace EasyDisk.Infrastructure.Identity.Services
             await _userManager.SetTwoFactorEnabledAsync(user, false);   
         }
 
+        public async Task ResendConfirmationEmail(ResendEmailDto resendEmailDto)
+        {
+            var user = await _userManager.FindByEmailAsync(resendEmailDto.Email);
+
+            if (user!.EmailConfirmed)
+            {
+                throw new ValidationException("Email is already confirmed.");
+            }
+
+            await ProcessConfirmationEmail(user);
+        }
+
+        public async Task<AuthResponseDto> RefreshTokenAsync(string userId)
+        {
+            var user = await _userManager.FindByIdAsync(userId) ?? throw new NotFoundException("User not found.");
+
+            var token = await GenerateJwtTokenAsync(user);
+
+            return new AuthResponseDto
+            {
+                Token = token,
+                Email = user.Email,
+                UserId = user.Id,
+                RequiresTwoFactor = user.TwoFactorEnabled
+            };
+        }
+
         private async Task ProcessTwoFactorAuth(ApplicationUser user, string code)
         {
             var isCodeValid = await _userManager.VerifyTwoFactorTokenAsync(
@@ -295,7 +343,8 @@ namespace EasyDisk.Infrastructure.Identity.Services
             {
                 new Claim(ClaimTypes.NameIdentifier, user.Id),
                 new Claim(ClaimTypes.Email, user.Email!),
-                new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
+                new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
+                new Claim("email_confirmed", user.EmailConfirmed.ToString().ToLower())
             };
 
             var userRoles = await _userManager.GetRolesAsync(user);
@@ -364,7 +413,6 @@ namespace EasyDisk.Infrastructure.Identity.Services
             var emailToken = await _userManager.GenerateEmailConfirmationTokenAsync(user);
 
             var encodedToken = System.Uri.EscapeDataString(emailToken);
-            // Замінити на інше посилання коли буде вже фронтенд, який буде обробляти підтвердження
             var confirmationLink = $"http://localhost:5173/confirm-email?userId={user.Id}&token={encodedToken}";
 
             var emailBody = $@"

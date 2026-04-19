@@ -1,8 +1,11 @@
 ﻿using EasyDisk.API.Filters;
 using EasyDisk.Application.DTOs;
 using EasyDisk.Application.Interfaces;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Org.BouncyCastle.Pqc.Crypto.Lms;
+using System.Security.Claims;
 
 namespace EasyDisk.API.Controllers
 {
@@ -59,13 +62,38 @@ namespace EasyDisk.API.Controllers
             return Ok(new { message = "Password changed successfully." });
         }
 
-        [HttpGet]
+        [HttpPost]
         [Route("confirm-email")]
         public async Task<IActionResult> ConfirmEmail([FromBody] ConfirmEmailDto dto)
         {
             await _authService.ConfirmEmailAsync(dto.UserId, dto.Token);
 
             return Ok(new { message = "Email successfully verified." });
+        }
+
+        [HttpPost]
+        [Route("resend-confirmation-email")]
+        public async Task<IActionResult> ResendConfirmationEmail([FromBody] ResendEmailDto dto)
+        {
+            await _authService.ResendConfirmationEmail(dto);
+
+            return Ok(new { message = "If your email is registered, a new confirmation link has been sent." });
+        }
+
+        [Authorize]
+        [HttpPost]
+        [Route("refresh-token")]
+        public async Task<IActionResult> RefreshToken()
+        {
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+            if (string.IsNullOrEmpty(userId))
+            {
+                return Unauthorized(new { message = "Invalid token claims." });
+            }
+
+            var result = await _authService.RefreshTokenAsync(userId);
+            return Ok(result);
         }
     }
 }

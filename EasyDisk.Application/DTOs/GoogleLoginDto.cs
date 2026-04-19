@@ -10,6 +10,6 @@ namespace EasyDisk.Application.DTOs
     public class GoogleLoginDto
     {
         [Required(ErrorMessage = "Token Google is required")]
-        public string IdToken { get; set; } = string.Empty;
+        public string AccessToken { get; set; } = string.Empty;
     }
 }

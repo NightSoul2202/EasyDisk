@@ -25,7 +25,7 @@ namespace EasyDisk.Infrastructure.Services
         public async Task SendEmailAsync(string toEmail, string subject, string htmlMessage)
         {
             var email = new MimeMessage();
-            email.From.Add(new MailboxAddress(_configuration["EmailSettings:SenderName"], _configuration["EmailSettings:SenderEmail"]!));
+            email.From.Add(new MailboxAddress(_configuration["SmtpSettings:SenderName"], _configuration["SmtpSettings:SenderEmail"]!));
             email.To.Add(MailboxAddress.Parse(toEmail));
             email.Subject = subject;
 
