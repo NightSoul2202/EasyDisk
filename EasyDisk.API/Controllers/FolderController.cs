@@ -37,6 +37,15 @@ namespace EasyDisk.API.Controllers
             return Ok(result);
         }
 
+        [HttpGet]
+        [Route("download/{id}")]
+        public async Task<IActionResult> DownloadFolder(int id)
+        {
+            var (zipStream, zipName) = await _folderService.DownloadFolderAsync(id);
+
+            return File(zipStream, "application/zip", zipName);
+        }
+
         [HttpPut]
         [Route("update-folder/{id}")]
         [Audit("Folder.Update", "Folder")]

@@ -5,6 +5,7 @@
 bin/
 obj/
 TestResults/
+Storage/
 
 ## Файли налаштувань Visual Studio
 .vs/

@@ -37,5 +37,15 @@ namespace EasyDisk.API.Controllers
 
             return File(fileStream, contentType, fileName);
         }
+
+        [AllowAnonymous]
+        [HttpGet]
+        [Route("info/{token}")]
+        public async Task<IActionResult> GetShareLinkInfo(string token)
+        {
+            var result = await _shareLinkService.GetShareLinkInfoAsync(token);
+
+            return Ok(result);
+        }
     }
 }

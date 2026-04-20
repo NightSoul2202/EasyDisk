@@ -23,7 +23,7 @@ namespace EasyDisk.API.Controllers
         [Audit("File.Upload", "File")]
         public async Task<IActionResult> UploadChunk([FromForm] UploadChunkDto uploadChunkDto, IFormFile chunk)
         {
-            if (chunk == null || chunk.Length == 0)
+            if (chunk == null)
             {
                 return BadRequest(new { message = "Chunk file is required." });
             }

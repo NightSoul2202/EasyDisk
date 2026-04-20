@@ -6,6 +6,7 @@ using EasyDisk.Domain.Entities;
 using EasyDisk.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using System;
+using System.IO.Compression;
 using System.Threading.Tasks;
 
 namespace EasyDisk.Application.Services
@@ -58,6 +59,22 @@ namespace EasyDisk.Application.Services
             };
         }
 
+        public async Task<(Stream ZipStream, string ZipName)> DownloadFolderAsync(int folderId)
+        {
+            var userId = _currentUserService.UserId ?? throw new ValidationException("User must be authenticated to view folders.");
+            var rootFolder = await _folderRepository.GetByIdAsync(folderId, userId).EnsureExistsAsync(() => $"Folder with id {folderId} not found.");
+
+            var memoryStream = new MemoryStream();
+
+            using (var archive = new ZipArchive(memoryStream, ZipArchiveMode.Create, leaveOpen: true))
+            {
+                await AddFolderToArchive(archive, folderId, "");
+            }
+
+            memoryStream.Position = 0;
+            return (memoryStream, $"{rootFolder.Name}.zip");
+        }
+
         public async Task<IEnumerable<FolderResponseDto>> GetFoldersAsync(int? parentFolderId = null)
         {
             var userId = _currentUserService.UserId ?? throw new ValidationException("User must be authenticated to view folders.");
@@ -71,6 +88,34 @@ namespace EasyDisk.Application.Services
                 ParentFolderId = f.ParentFolderId,
                 CreatedAt = f.CreatedAt
             });
+        }
+
+        public async Task<IEnumerable<FolderResponseDto>> GetFolderPathAsync(int folderId)
+        {
+            var userId = _currentUserService.UserId ?? throw new ValidationException("User must be authenticated.");
+
+            var path = new List<FolderResponseDto>();
+            int? currentId = folderId;
+
+            while (currentId.HasValue)
+            {
+                var folder = await _folderRepository.GetByIdAsync(currentId.Value, userId);
+                if (folder == null)
+                {
+                    break;
+                }
+
+                path.Insert(0, new FolderResponseDto 
+                { 
+                    Id = folder.Id, 
+                    Name = folder.Name, 
+                    ParentFolderId = folder.ParentFolderId 
+                });
+
+                currentId = folder.ParentFolderId;
+            }
+
+            return path;
         }
 
         public async Task<FolderResponseDto> UpdateFolderAsync(int folderId, UpdateFolderDto updateFolderDto)
@@ -174,6 +219,33 @@ namespace EasyDisk.Application.Services
             foreach (var subFolder in subFolders)
             {
                 await MarkFolderAsDeletedRecursiveAsync(subFolder.Id, userId);
+            }
+        }
+
+        private async Task AddFolderToArchive(ZipArchive archive, int folderId, string currentPath)
+        {
+            var userId = _currentUserService.UserId!;
+
+            var folder = await _folderRepository.GetByIdWithFilesAsync(folderId, userId).EnsureExistsAsync(() => $"Folder with id {folderId} not found."); ;
+
+            foreach (var file in folder.Files)
+            {
+                var entryName = Path.Combine(currentPath, file.Name);
+                var entry = archive.CreateEntry(entryName);
+
+                using (var entryStream = entry.Open())
+                using (var fileStream = await _fileStorageService.GetFileStreamAsync(file.PhysicalPath))
+                {
+                    await fileStream.CopyToAsync(entryStream);
+                }
+            }
+
+            var subFolders = await _folderRepository.GetByParentIdAsync(folderId, userId);
+
+            foreach (var subFolder in subFolders)
+            {
+                var newPath = Path.Combine(currentPath, subFolder.Name);
+                await AddFolderToArchive(archive, subFolder.Id, newPath);
             }
         }
     }

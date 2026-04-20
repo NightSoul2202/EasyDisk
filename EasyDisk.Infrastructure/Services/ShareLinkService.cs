@@ -98,5 +98,23 @@ namespace EasyDisk.Infrastructure.Services
 
             return (stream, contentType, shareLink.File.Name);
         }
+
+        public async Task<ShareLinkInfoDto> GetShareLinkInfoAsync(string token)
+        {
+            var shareLink = await _shareLinkRepository.GetByTokenAsync(token);
+
+            if (shareLink == null || (shareLink.ExpirationDate.HasValue && shareLink.ExpirationDate.Value < DateTime.UtcNow))
+            {
+                throw new NotFoundException("Share link not found or expired.");
+            }
+
+            return new ShareLinkInfoDto
+            {
+                FileName = shareLink.File!.Name,
+                Size = shareLink.File.Size,
+                IsPasswordProtected = !string.IsNullOrEmpty(shareLink.PasswordHash),
+                ExpirationDate = shareLink.ExpirationDate
+            };
+        }
     }
 }
