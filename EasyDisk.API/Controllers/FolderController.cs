@@ -46,6 +46,15 @@ namespace EasyDisk.API.Controllers
             return File(zipStream, "application/zip", zipName);
         }
 
+        [HttpGet]
+        [Route("{id}/path")]
+        public async Task<IActionResult> GetFolderPath(int id)
+        {
+            var path = await _folderService.GetFolderPathAsync(id);
+
+            return Ok(path);
+        }
+
         [HttpPut]
         [Route("update-folder/{id}")]
         [Audit("Folder.Update", "Folder")]
