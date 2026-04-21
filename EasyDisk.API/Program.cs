@@ -102,6 +102,8 @@ namespace EasyDisk.API
                 };
             });
 
+            builder.Services.AddMemoryCache();
+
             builder.Services.AddScoped<IAuthService, AuthService>();
             builder.Services.AddScoped<ICurrentUserService, CurrentUserService>();
             builder.Services.AddScoped<IFolderService, FolderService>();

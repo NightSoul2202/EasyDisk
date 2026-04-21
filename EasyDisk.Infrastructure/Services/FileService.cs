@@ -149,10 +149,8 @@ namespace EasyDisk.Infrastructure.Services
             return await FinalizeUploadProcessAsync(uploadChunkDto, userId);
         }
 
-        public async Task<(Stream FileStream, string ContentType, string FileName)> DownloadFileAsync(Guid fileId)
+        public async Task<(Stream FileStream, string ContentType, string FileName)> DownloadFileAsync(Guid fileId, string userId)
         {
-            var userId = _currentUserService.UserId ?? throw new ValidationException("User must be authenticated to download file.");
-
             var file = await _fileRepository.GetByIdWithTagsAsync(fileId, userId).EnsureExistsAsync(() => $"File with id {fileId} not found.");
 
             var fileStream = await _fileStorageService.GetFileStreamAsync(file.PhysicalPath);

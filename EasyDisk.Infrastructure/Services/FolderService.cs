@@ -59,16 +59,15 @@ namespace EasyDisk.Application.Services
             };
         }
 
-        public async Task<(Stream ZipStream, string ZipName)> DownloadFolderAsync(int folderId)
+        public async Task<(Stream ZipStream, string ZipName)> DownloadFolderAsync(int folderId, string userId)
         {
-            var userId = _currentUserService.UserId ?? throw new ValidationException("User must be authenticated to view folders.");
             var rootFolder = await _folderRepository.GetByIdAsync(folderId, userId).EnsureExistsAsync(() => $"Folder with id {folderId} not found.");
 
             var memoryStream = new MemoryStream();
 
             using (var archive = new ZipArchive(memoryStream, ZipArchiveMode.Create, leaveOpen: true))
             {
-                await AddFolderToArchive(archive, folderId, "");
+                await AddFolderToArchive(archive, folderId, "", userId);
             }
 
             memoryStream.Position = 0;
@@ -222,10 +221,8 @@ namespace EasyDisk.Application.Services
             }
         }
 
-        private async Task AddFolderToArchive(ZipArchive archive, int folderId, string currentPath)
+        private async Task AddFolderToArchive(ZipArchive archive, int folderId, string currentPath, string userId)
         {
-            var userId = _currentUserService.UserId!;
-
             var folder = await _folderRepository.GetByIdWithFilesAsync(folderId, userId).EnsureExistsAsync(() => $"Folder with id {folderId} not found."); ;
 
             foreach (var file in folder.Files)
@@ -245,7 +242,7 @@ namespace EasyDisk.Application.Services
             foreach (var subFolder in subFolders)
             {
                 var newPath = Path.Combine(currentPath, subFolder.Name);
-                await AddFolderToArchive(archive, subFolder.Id, newPath);
+                await AddFolderToArchive(archive, subFolder.Id, newPath, userId);
             }
         }
     }

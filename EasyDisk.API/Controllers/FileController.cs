@@ -3,6 +3,8 @@ using EasyDisk.Application.DTOs;
 using EasyDisk.Application.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Caching.Memory;
+using System.Security.Claims;
 
 namespace EasyDisk.API.Controllers
 {
@@ -12,10 +14,12 @@ namespace EasyDisk.API.Controllers
     public class FileController : ControllerBase
     {
         private readonly IFileService _fileService;
+        private readonly IMemoryCache _cache;
 
-        public FileController(IFileService fileService)
+        public FileController(IFileService fileService, IMemoryCache cache)
         {
             _fileService = fileService;
+            _cache = cache;
         }
 
         [HttpPost]
@@ -40,12 +44,35 @@ namespace EasyDisk.API.Controllers
         }
 
         [HttpGet]
-        [Route("download/{id}")]
-        public async Task<IActionResult> Download(Guid id)
+        [Route("{id}/download-ticket")]
+        public IActionResult GetDownloadTicket(Guid id)
         {
-            var (fileStream, contentType, fileName) = await _fileService.DownloadFileAsync(id);
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (userId == null) return Unauthorized();
 
-            return File(fileStream, contentType, fileName);
+            var ticket = Guid.NewGuid().ToString("N");
+
+            _cache.Set($"FileTicket_{id}_{ticket}", userId, TimeSpan.FromSeconds(60));
+
+            return Ok(new { Ticket = ticket });
+        }
+
+        [AllowAnonymous]
+        [HttpGet]
+        [Route("download/{id}")]
+        public async Task<IActionResult> DownloadFile(Guid id, [FromQuery] string ticket)
+        {
+            var cacheKey = $"FileTicket_{id}_{ticket}";
+            if (string.IsNullOrEmpty(ticket) || !_cache.TryGetValue(cacheKey, out string? userId))
+            {
+                return Unauthorized("Invalid or expired download ticket.");
+            }
+
+            _cache.Remove(cacheKey);
+
+            var result = await _fileService.DownloadFileAsync(id, userId!);
+
+            return File(result.FileStream, result.ContentType, result.FileName);
         }
 
         [HttpGet]
