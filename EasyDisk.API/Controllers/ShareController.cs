@@ -29,11 +29,31 @@ namespace EasyDisk.API.Controllers
         }
 
         [AllowAnonymous]
+        [HttpPost]
+        [Route("folder-content/{token}")]
+        public async Task<IActionResult> GetSharedFolderContent(string token, [FromQuery] int? folderId, [FromBody] VerifyPasswordDto dto)
+        {
+            var result = await _shareLinkService.GetSharedFolderContentAsync(token, dto.Password, folderId);
+
+            return Ok(result);
+        }
+
+        [AllowAnonymous]
         [HttpGet]
         [Route("s/{token}")]
         public async Task<IActionResult> DownloadPublic(string token, [FromQuery] string? password = null)
         {
             var (fileStream, contentType, fileName) = await _shareLinkService.DownloadByTokenAsync(token, password);
+
+            return File(fileStream, contentType, fileName);
+        }
+
+        [AllowAnonymous]
+        [HttpGet]
+        [Route("s/{token}/item/{fileId}")]
+        public async Task<IActionResult> DownloadSharedItem(string token, Guid fileId, [FromQuery] string? password = null, [FromQuery] int? folderId = null)
+        {
+            var (fileStream, contentType, fileName) = await _shareLinkService.DownloadSharedItemAsync(token, fileId, password, folderId);
 
             return File(fileStream, contentType, fileName);
         }

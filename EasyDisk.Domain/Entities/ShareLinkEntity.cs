@@ -10,9 +10,14 @@
         public int DownloadCount { get; set; }
 
         public string OwnerId { get; set; } = string.Empty;
-        public Guid FileId { get; set; }
 
+        public Guid? FileId { get; set; }
         public FileEntity? File { get; set; }
 
+        public int? FolderId { get; set; }
+        public FolderEntity? Folder { get; set; }
+
+        public bool IsFolderLink => FolderId.HasValue;
+        public bool IsFileLink => FileId.HasValue;
     }
 }

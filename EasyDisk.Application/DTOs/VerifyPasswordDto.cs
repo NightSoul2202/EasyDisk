@@ -6,11 +6,8 @@ using System.Threading.Tasks;
 
 namespace EasyDisk.Application.DTOs
 {
-    public class CreateShareLinkDto
+    public class VerifyPasswordDto
     {
-        public Guid? FileId { get; set; }
-        public int? FolderId { get; set; }
         public string? Password { get; set; }
-        public int? ExpirationHours { get; set; }
     }
 }

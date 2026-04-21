@@ -9,7 +9,8 @@ namespace EasyDisk.Application.DTOs
     public class ShareLinkInfoDto
     {
         public string FileName { get; set; } = string.Empty;
-        public long Size { get; set; }
+        public bool IsFolder { get; set; }
+        public long? Size { get; set; }
         public bool IsPasswordProtected { get; set; }
         public DateTime? ExpirationDate { get; set; }
     }

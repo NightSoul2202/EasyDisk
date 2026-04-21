@@ -22,6 +22,14 @@ namespace EasyDisk.Infrastructure.Repositories
                 .FirstOrDefaultAsync(s => s.Token == token);
         }
 
+        public async Task<ShareLinkEntity?> GetByTokenWithRelationsAsync(string token)
+        {
+            return await _dbContext.ShareLinks
+                .Include(s => s.File)
+                .Include(s => s.Folder)
+                .FirstOrDefaultAsync(s => s.Token == token);
+        }
+
         public Task AddAsync(ShareLinkEntity shareLink)
         {
             _dbContext.ShareLinks.Add(shareLink);

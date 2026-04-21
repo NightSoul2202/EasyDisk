@@ -11,6 +11,7 @@ namespace EasyDisk.Application.Interfaces
     public interface IShareLinkRepository
     {
         Task<ShareLinkEntity?> GetByTokenAsync(string token);
+        Task<ShareLinkEntity?> GetByTokenWithRelationsAsync(string token);
         Task AddAsync(ShareLinkEntity shareLink);
         Task SaveChangesAsync();
     }
