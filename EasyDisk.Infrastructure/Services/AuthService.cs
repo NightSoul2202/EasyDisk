@@ -40,243 +40,60 @@ namespace EasyDisk.Infrastructure.Identity.Services
 
         public async Task<AuthResponseDto> LoginAsync(LoginDto loginDto)
         {
-            var user = await _userManager.FindByEmailAsync(loginDto.Email);
-
-            if (user == null || !await _userManager.CheckPasswordAsync(user, loginDto.Password))
-            {
-                await _auditService.LogAsync(
-                    action: "User.LoginFailed",
-                    entityType: "User",
-                    entityId: user?.Id,
-                    details: new { AttemptedEmail = loginDto.Email, Reason = "Invalid credentials" },
-                    isSuccess: false
-                );
-
-                throw new ValidationException("Invalid email or password.");
-            }
-
-            if (user.TwoFactorEnabled)
-            {
-                if (string.IsNullOrEmpty(loginDto.Code))
-                {
-                    return new AuthResponseDto
-                    {
-                        RequiresTwoFactor = true,
-                    };
-                }
-
-                await ProcessTwoFactorAuth(user, loginDto.Code);
-            }
-            
-            var token = await GenerateJwtTokenAsync(user);
-
-            await _auditService.LogAsync(
-                action: "User.Login",
-                entityType: "User",
-                entityId: user.Id,
-                details: new { Email = user.Email },
-                isSuccess: true
-            );
-
-            return new AuthResponseDto
-            {
-                Token = token,
-                Email = user.Email,
-                UserId = user.Id,
-                RequiresTwoFactor = false
-            };
-        }
-
-        public async Task<AuthResponseDto> RegisterAsync(RegisterDto registerDto)
-        {
-            var userExists = await _userManager.FindByEmailAsync(registerDto.Email);
-            if (userExists != null)
-            {
-                await _auditService.LogAsync(
-                    action: "User.RegisterFailed",
-                    entityType: "User",
-                    entityId: userExists?.Id,
-                    details: new { AttemptedEmail = registerDto.Email, Reason = "Invalid credentials" },
-                    isSuccess: false
-                );
-
-                throw new ValidationException($"User with email {registerDto.Email} already exists.");
-            }
-
-            var user = await CreateNewUserAsync(registerDto.Email, registerDto.Password);
-
-            return new AuthResponseDto {};
+            var user = await ValidateUserCredentialsAsync(loginDto.Email, loginDto.Password);
+            return await FinalizeAuthenticationAsync(user, loginDto.Code, isGoogleAuth: false);
         }
 
         public async Task<AuthResponseDto> GoogleLoginAsync(GoogleLoginDto googleLoginDto)
         {
-            using var httpClient = new HttpClient();
-            httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", googleLoginDto.AccessToken);
+            var email = await FetchEmailFromGoogleAsync(googleLoginDto.AccessToken);
+            var user = await EnsureGoogleUserExistsAsync(email);
+            return await FinalizeAuthenticationAsync(user, googleLoginDto.Code, isGoogleAuth: true);
+        }
 
-            var response = await httpClient.GetAsync("https://www.googleapis.com/oauth2/v3/userinfo");
-
-            if (!response.IsSuccessStatusCode)
-            {
-                await _auditService.LogAsync(
-                    action: "User.GoogleLoginFailed",
-                    entityType: "User",
-                    entityId: null,
-                    details: new { Reason = "Invalid Google Access Token" },
-                    isSuccess: false
-                );
-                throw new ValidationException("Invalid Google token.");
-            }
-
-            var content = await response.Content.ReadAsStringAsync();
-            using var doc = JsonDocument.Parse(content);
-            var email = doc.RootElement.GetProperty("email").GetString();
-
-            if (string.IsNullOrEmpty(email))
-            {
-                throw new ValidationException("Google account does not have an email.");
-            }
-
-            var user = await _userManager.FindByEmailAsync(email);
-            if (user == null)
-            {
-                user = await CreateNewUserAsync(email);
-                await _userManager.UpdateAsync(user);
-            }
-
-            if (user.TwoFactorEnabled)
-            {
-                if (string.IsNullOrEmpty(googleLoginDto.Code))
-                {
-                    return new AuthResponseDto
-                    {
-                        RequiresTwoFactor = true,
-                        Email = user.Email
-                    };
-                }
-
-                await ProcessTwoFactorAuth(user, googleLoginDto.Code);
-            }
-
-            var token = await GenerateJwtTokenAsync(user);
-
-            await _auditService.LogAsync(
-                action: "User.GoogleLogin",
-                entityType: "User",
-                entityId: user.Id,
-                details: new { Email = user.Email },
-                isSuccess: true
-            );
-
-            return new AuthResponseDto
-            {
-                Token = token,
-                Email = user.Email,
-                UserId = user.Id,
-                RequiresTwoFactor = false
-            };
+        public async Task<AuthResponseDto> RegisterAsync(RegisterDto registerDto)
+        {
+            await EnsureEmailIsUniqueAsync(registerDto.Email);
+            var user = await CreateNewUserAsync(registerDto.Email, registerDto.Password);
+            return new AuthResponseDto();
         }
 
         public async Task ConfirmEmailAsync(string userId, string token)
         {
             if (string.IsNullOrWhiteSpace(userId) || string.IsNullOrWhiteSpace(token))
-            {
                 throw new ValidationException("Wrong confirmation link.");
-            }
 
             var user = await _userManager.FindByIdAsync(userId).EnsureExistsAsync(() => "User not found");
-
             var result = await _userManager.ConfirmEmailAsync(user, token);
 
+            await LogAuditResultAsync("User.EmailConfirmation", user.Id, new { Email = user.Email }, result.Succeeded);
+
             if (!result.Succeeded)
-            {
-                await _auditService.LogAsync(
-                    action: "User.EmailConfirmFailed",
-                    entityType: "User",
-                    entityId: user.Id,
-                    details: new { Email = user.Email },
-                    isSuccess: false
-                );
-
                 throw new ValidationException("Email verification failed. The link may be outdated or has already been used.");
-            }
-
-            await _auditService.LogAsync(
-                action: "User.EmailConfirmed",
-                entityType: "User",
-                entityId: user.Id,
-                details: new { Email = user.Email },
-                isSuccess: true
-            );
         }
 
         public async Task ForgotPasswordAsync(ForgotPasswordDto dto)
         {
             var user = await _userManager.FindByEmailAsync(dto.Email);
-
-            if (user == null || !(await _userManager.IsEmailConfirmedAsync(user))) 
+            if (user == null || !await _userManager.IsEmailConfirmedAsync(user))
             {
-                await _auditService.LogAsync(
-                    action: "User.PasswordResetRequested",
-                    entityType: "User",
-                    entityId: null,
-                    details: new { AttemptedEmail = dto.Email, Reason = "User not found or email not confirmed" },
-                    isSuccess: false
-                );
-
+                await LogAuditResultAsync("User.PasswordResetRequested", null, new { AttemptedEmail = dto.Email, Reason = "Invalid user state" }, false);
                 return;
             }
 
-            var resetToken = await _userManager.GeneratePasswordResetTokenAsync(user);
-            var encodedToken = System.Uri.EscapeDataString(resetToken);
-
-            var frontendUrl = "http://localhost:5173";
-            var resetLink = $"{frontendUrl}/reset-password?email={user.Email}&token={encodedToken}";
-
-            var emailBody = $@"
-                <h2>Password Recovery - EasyDisk</h2>
-                <p>You received this email because a password reset request for your account has been received.</p>
-                <p>To set a new password, click on the button below:</p>
-                <a href='{resetLink}' style='padding: 10px 20px; background-color: #dc3545; color: white; text-decoration: none; border-radius: 5px; display: inline-block;'>Reset password</a>
-                <p>If you have not made this request, simply ignore this email.</p>
-            ";
-
-            await _emailSenderService.SendEmailAsync(user.Email!, "Password reset - EasyDisk", emailBody);
-
-            await _auditService.LogAsync(
-                action: "User.PasswordResetRequested",
-                entityType: "User",
-                entityId: user.Id,
-                details: new { Email = user.Email },
-                isSuccess: true
-            );
+            await SendPasswordResetEmailAsync(user);
+            await LogAuditResultAsync("User.PasswordResetRequested", user.Id, new { Email = user.Email }, true);
         }
 
         public async Task ResetPasswordAsync(ResetPasswordDto dto)
         {
             var user = await _userManager.FindByEmailAsync(dto.Email) ?? throw new ValidationException("Invalid password recovery request.");
-
             var result = await _userManager.ResetPasswordAsync(user, dto.Token, dto.NewPassword);
 
+            await LogAuditResultAsync("User.PasswordReset", user.Id, new { Email = user.Email }, result.Succeeded);
+
             if (!result.Succeeded)
-            {
-                await _auditService.LogAsync(
-                    action: "User.PasswordResetFailed",
-                    entityType: "User",
-                    entityId: user.Id,
-                    details: new { Email = user.Email, Result = result.ToString() },
-                    isSuccess: false
-                );
-
                 throw new ValidationException($"Failed to reset password. The link may be out of date.");
-            }
-
-            await _auditService.LogAsync(
-                action: "User.PasswordReset",
-                entityType: "User",
-                entityId: user.Id,
-                details: new { Email = user.Email },
-                isSuccess: true
-            );
         }
 
         public async Task<TwoFactorSetupResponseDto> Get2FaSetupInfoAsync(string userId)
@@ -347,12 +164,102 @@ namespace EasyDisk.Infrastructure.Identity.Services
             };
         }
 
-        private async Task ProcessTwoFactorAuth(ApplicationUser user, string code)
+        private async Task<ApplicationUser> ValidateUserCredentialsAsync(string email, string password)
         {
-            var isCodeValid = await _userManager.VerifyTwoFactorTokenAsync(
+            var user = await _userManager.FindByEmailAsync(email);
+            if (user == null || !await _userManager.CheckPasswordAsync(user, password))
+            {
+                await LogAuditResultAsync("User.LoginFailed", user?.Id, new { AttemptedEmail = email, Reason = "Invalid credentials" }, false);
+                throw new ValidationException("Invalid email or password.");
+            }
+            return user;
+        }
+
+        private async Task<string> FetchEmailFromGoogleAsync(string accessToken)
+        {
+            using var httpClient = new HttpClient();
+            httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+            var response = await httpClient.GetAsync("https://www.googleapis.com/oauth2/v3/userinfo");
+
+            if (!response.IsSuccessStatusCode)
+            {
+                await LogAuditResultAsync("User.GoogleLoginFailed", null, new { Reason = "Invalid Google Access Token" }, false);
+                throw new ValidationException("Invalid Google token.");
+            }
+
+            var content = await response.Content.ReadAsStringAsync();
+            using var doc = JsonDocument.Parse(content);
+            var email = doc.RootElement.GetProperty("email").GetString();
+
+            return string.IsNullOrEmpty(email) ? throw new ValidationException("Google account does not have an email.") : email;
+        }
+
+        private async Task<ApplicationUser> EnsureGoogleUserExistsAsync(string email)
+        {
+            var user = await _userManager.FindByEmailAsync(email);
+            if (user == null)
+            {
+                user = await CreateNewUserAsync(email);
+                await _userManager.UpdateAsync(user);
+            }
+            return user;
+        }
+
+        private async Task<AuthResponseDto> FinalizeAuthenticationAsync(ApplicationUser user, string? code, bool isGoogleAuth)
+        {
+            if (user.TwoFactorEnabled)
+            {
+                if (string.IsNullOrEmpty(code))
+                {
+                    return new AuthResponseDto { RequiresTwoFactor = true, Email = user.Email };
+                }
+                await VerifyTwoFactorCodeAsync(user, code);
+            }
+
+            var token = await GenerateJwtTokenAsync(user);
+            var actionName = isGoogleAuth ? "User.GoogleLogin" : "User.Login";
+
+            await LogAuditResultAsync(actionName, user.Id, new { Email = user.Email }, true);
+
+            return new AuthResponseDto
+            {
+                Token = token,
+                Email = user.Email,
+                UserId = user.Id,
+                RequiresTwoFactor = false
+            };
+        }
+
+        private async Task VerifyTwoFactorCodeAsync(ApplicationUser user, string code)
+        {
+            await _userManager.VerifyTwoFactorTokenAsync(
                 user,
                 _userManager.Options.Tokens.AuthenticatorTokenProvider,
                 code).ValidateCodeAsync(() => "Wrong 2FA code.");
+        }
+
+        private async Task EnsureEmailIsUniqueAsync(string email)
+        {
+            var userExists = await _userManager.FindByEmailAsync(email);
+            if (userExists != null)
+            {
+                await LogAuditResultAsync("User.RegisterFailed", userExists.Id, new { AttemptedEmail = email, Reason = "Email taken" }, false);
+                throw new ValidationException($"User with email {email} already exists.");
+            }
+        }
+
+        private async Task SendPasswordResetEmailAsync(ApplicationUser user)
+        {
+            var resetToken = await _userManager.GeneratePasswordResetTokenAsync(user);
+            var encodedToken = System.Uri.EscapeDataString(resetToken);
+            var resetLink = $"http://localhost:5173/reset-password?email={user.Email}&token={encodedToken}";
+
+            var emailBody = $@"
+                <h2>Password Recovery - EasyDisk</h2>
+                <p>To set a new password, click on the button below:</p>
+                <a href='{resetLink}' style='padding: 10px 20px; background-color: #dc3545; color: white; border-radius: 5px; display: inline-block;'>Reset password</a>";
+
+            await _emailSenderService.SendEmailAsync(user.Email!, "Password reset - EasyDisk", emailBody);
         }
 
         private async Task<string> GenerateJwtTokenAsync(ApplicationUser user)
@@ -441,6 +348,11 @@ namespace EasyDisk.Infrastructure.Identity.Services
             ";
 
             await _emailSenderService.SendEmailAsync(user.Email!, "Registation confirmation - EasyDisk", emailBody);
+        }
+
+        private async Task LogAuditResultAsync(string action, string? entityId, object details, bool isSuccess)
+        {
+            await _auditService.LogAsync(action, "User", entityId, details, isSuccess);
         }
     }
 }
