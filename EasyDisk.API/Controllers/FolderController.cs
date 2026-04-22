@@ -41,36 +41,27 @@ namespace EasyDisk.API.Controllers
             return Ok(result);
         }
 
-        [HttpGet]
-        [Route("{id}/download-ticket")]
-        public IActionResult GetDownloadTicket(int id)
+        [HttpPost]
+        [Route("prepare-zip/{id}")]
+        public async Task<IActionResult> PrepareZip(int id)
         {
             var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-            if (userId == null) return Unauthorized();
 
-            var ticket = Guid.NewGuid().ToString("N");
+            var tempFileName = await _folderService.PrepareZipTaskAsync(id, userId!);
 
-            _cache.Set($"FolderTicket_{id}_{ticket}", userId, TimeSpan.FromSeconds(60));
-
-            return Ok(new { Ticket = ticket });
+            return Ok(new { tempFileName });
         }
 
         [AllowAnonymous]
         [HttpGet]
-        [Route("download/{id}")]
-        public async Task<IActionResult> DownloadFolder(int id, [FromQuery] string ticket)
+        [Route("download-temp/{fileName}")]
+        public IActionResult DownloadTempZip(string fileName)
         {
-            var cacheKey = $"FolderTicket_{id}_{ticket}";
-            if (string.IsNullOrEmpty(ticket) || !_cache.TryGetValue(cacheKey, out string? userId))
-            {
-                return Unauthorized("Invalid or expired download ticket.");
-            }
+            string fullPath = Path.Combine(Path.GetTempPath(), fileName);
+            if (!System.IO.File.Exists(fullPath)) return NotFound();
 
-            _cache.Remove(cacheKey);
-
-            var (zipStream, zipName) = await _folderService.DownloadFolderAsync(id, userId!);
-
-            return File(zipStream, "application/zip", zipName);
+            var fileStream = new FileStream(fullPath, FileMode.Open, FileAccess.Read, FileShare.None, 4096, FileOptions.DeleteOnClose);
+            return File(fileStream, "application/zip", "folder.zip");
         }
 
         [HttpGet]
@@ -80,6 +71,16 @@ namespace EasyDisk.API.Controllers
             var path = await _folderService.GetFolderPathAsync(id);
 
             return Ok(path);
+        }
+
+        [HttpPut]
+        [Route("{id}/move")]
+        [Audit("Folder.Move", "Folder")]
+        public async Task<IActionResult> MoveFolder(int id, [FromBody] MoveItemDto dto)
+        {
+            await _folderService.MoveFolderAsync(id, dto.TargetFolderId);
+
+            return NoContent();
         }
 
         [HttpPut]

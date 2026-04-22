@@ -68,6 +68,26 @@ namespace EasyDisk.Infrastructure.Repositories
             return await query.AnyAsync();
         }
 
+        public async Task<List<FolderEntity>> GetDeletedFoldersAsync(string userId)
+        {
+            return await _dbContext.Folders
+                .Where(f => f.OwnerId == userId && f.DeletedAt != null)
+                .ToListAsync();
+        }
+
+        public async Task<FolderEntity?> GetDeletedFolderByIdAsync(int id, string userId)
+        {
+            return await _dbContext.Folders
+                .FirstOrDefaultAsync(f => f.Id == id && f.OwnerId == userId && f.DeletedAt != null);
+        }
+
+        public Task UpdateAsync(FolderEntity folder)
+        {
+            _dbContext.Folders.Update(folder);
+
+            return Task.CompletedTask;
+        }
+
         public async Task SaveChangesAsync()
         {
             await _dbContext.SaveChangesAsync();

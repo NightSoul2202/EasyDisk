@@ -51,6 +51,7 @@ namespace EasyDisk.Infrastructure.Services
                 CreatedAt = f.CreatedAt
             });
         }
+
         public async Task<IEnumerable<FileResponseDto>> SearchFilesAsync(FileSearchParametersDto dto)
         {
             var userId = _currentUserService.UserId ?? throw new ValidationException("User must be authenticated to search files.");
@@ -164,6 +165,24 @@ namespace EasyDisk.Infrastructure.Services
             return (fileStream, contentType, file.Name);
         }
 
+        public async Task MoveFileAsync(Guid fileId, int? targetFolderId)
+        {
+            var userId = _currentUserService.UserId ?? throw new ValidationException("User not found");
+
+            var file = await _fileRepository.GetByIdAsync(fileId, userId)
+                ?? throw new NotFoundException("File", fileId);
+
+            if (targetFolderId.HasValue)
+            {
+                var targetFolder = await _folderRepository.GetByIdAsync(targetFolderId.Value, userId)
+                    ?? throw new NotFoundException("Target folder", targetFolderId.Value);
+            }
+
+            file.FolderId = targetFolderId;
+            await _fileRepository.UpdateAsync(file);
+            await _fileRepository.SaveChangesAsync();
+        }
+
         public async Task<IEnumerable<FileVersionResponseDto>> GetFileVersionsAsync(Guid fileId)
         {
             var userId = _currentUserService.UserId ?? throw new ValidationException("User must be authenticated to view file versions.");
@@ -177,8 +196,26 @@ namespace EasyDisk.Infrastructure.Services
                     Id = v.Id,
                     VersionNumber = v.VersionNumber,
                     Size = v.Size,
-                    UploadedAt = v.UploadedAt
+                    UploadedAt = v.UploadedAt,
+                    IsCurrent = v.PhysicalPath == file.PhysicalPath
                 });
+        }
+
+        public async Task RestoreFileVersionAsync(Guid fileId, int versionNumber)
+        {
+            var userId = _currentUserService.UserId ?? throw new ValidationException("User not found.");
+
+            var file = await _fileRepository.GetByIdWithVersionsAsync(fileId, userId)
+                ?? throw new NotFoundException("File", fileId);
+
+            var targetVersion = file.Versions.FirstOrDefault(v => v.VersionNumber == versionNumber)
+                ?? throw new NotFoundException("Version", versionNumber);
+
+            file.PhysicalPath = targetVersion.PhysicalPath;
+            file.Size = targetVersion.Size;
+
+            await _fileRepository.UpdateAsync(file);
+            await _fileRepository.SaveChangesAsync();
         }
 
         public async Task CancelUploadAsync(string uploadId)
@@ -246,17 +283,18 @@ namespace EasyDisk.Infrastructure.Services
             var newVersion = new FileVersionEntity
             {
                 Id = Guid.NewGuid(),
+                FileId = existingFile.Id,
                 VersionNumber = newVersionNumber,
                 Size = newSize,
                 PhysicalPath = newPhysicalPath
             };
 
-            existingFile.Versions.Add(newVersion);
+            await _fileRepository.AddFileVersionAsync(newVersion);
 
             existingFile.Size = newSize;
             existingFile.PhysicalPath = newPhysicalPath;
 
-            await _userRepository.UpdateUserQuotaAsync(existingFile.OwnerId, newSize - existingFile.Size);
+            await _userRepository.UpdateUserQuotaAsync(existingFile.OwnerId, newSize);
 
             await _fileRepository.SaveChangesAsync();
 

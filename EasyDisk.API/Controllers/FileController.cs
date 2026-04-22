@@ -43,6 +43,16 @@ namespace EasyDisk.API.Controllers
             return Ok(new { message = $"Chunk {uploadChunkDto.ChunkIndex + 1} from {uploadChunkDto.TotalChunks} successful uploaded." });
         }
 
+        [HttpPost]
+        [Route("{id}/versions/{versionNumber}/restore")]
+        [Audit("File.RestoreVersion", "File")]
+        public async Task<IActionResult> RestoreFileVersion(Guid id, int versionNumber)
+        {
+            await _fileService.RestoreFileVersionAsync(id, versionNumber);
+
+            return Ok();
+        }
+
         [HttpGet]
         [Route("{id}/download-ticket")]
         public IActionResult GetDownloadTicket(Guid id)
@@ -100,6 +110,16 @@ namespace EasyDisk.API.Controllers
             var files = await _fileService.SearchFilesAsync(dto);
 
             return Ok(files);
+        }
+
+        [HttpPut]
+        [Route("{id}/move")]
+        [Audit("File.Move", "File")]
+        public async Task<IActionResult> MoveFile(Guid id, [FromBody] MoveItemDto dto)
+        {
+            await _fileService.MoveFileAsync(id, dto.TargetFolderId);
+
+            return NoContent();
         }
 
         [HttpPut]

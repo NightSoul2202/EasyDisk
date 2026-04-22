@@ -7,9 +7,9 @@ using EasyDisk.Infrastructure.Repositories;
 using Microsoft.AspNetCore.StaticFiles;
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.IO.Compression;
 using System.Linq;
-using System.Text;
 using System.Threading.Tasks;
 
 namespace EasyDisk.Infrastructure.Services
@@ -35,230 +35,236 @@ namespace EasyDisk.Infrastructure.Services
             _currentUserService = currentUserService;
             _fileStorageService = fileStorageService;
         }
-        
+
         public async Task<ShareLinkResponseDto> CreateShareLinkAsync(CreateShareLinkDto dto)
         {
-            var userId = _currentUserService.UserId ?? throw new ValidationException("User must be authenticated to create a share link.");
+            var userId = GetCurrentUserId();
+            ValidateCreationRules(dto);
 
-            if (dto.FileId == null && dto.FolderId == null)
-                throw new ValidationException("You must provide either a FileId or a FolderId.");
+            var shareLink = await BuildAndSaveShareLinkAsync(dto, userId);
 
-            if (dto.FileId != null && dto.FolderId != null)
-                throw new ValidationException("Cannot share both a file and a folder in a single link.");
-
-            var token = Guid.NewGuid().ToString("N").Substring(0, 12);
-
-            var shareLink = new ShareLinkEntity
-            {
-                Id = Guid.NewGuid(),
-                Token = token,
-                OwnerId = userId,
-                CreatedAt = DateTime.UtcNow,
-                ExpirationDate = dto.ExpirationHours.HasValue
-                    ? DateTime.UtcNow.AddHours(dto.ExpirationHours.Value)
-                    : null
-            };
-
-            if (!string.IsNullOrEmpty(dto.Password))
-            {
-                shareLink.PasswordHash = BCrypt.Net.BCrypt.HashPassword(dto.Password);
-            }
-
-            if (dto.FileId.HasValue)
-            {
-                var file = await _fileRepository.GetByIdAsync(dto.FileId.Value, userId)
-                    ?? throw new NotFoundException("File", dto.FileId);
-
-                shareLink.FileId = dto.FileId;
-            }
-            else if (dto.FolderId.HasValue)
-            {
-                var folder = await _folderRepository.GetByIdAsync(dto.FolderId.Value, userId)
-                    ?? throw new NotFoundException("Folder", dto.FolderId.Value);
-
-                shareLink.FolderId = dto.FolderId.Value;
-            }
-
-            await _shareLinkRepository.AddAsync(shareLink);
-            await _shareLinkRepository.SaveChangesAsync();
-
-            return new ShareLinkResponseDto
-            {
-                Token = token,
-                DownloadUrl = $"/api/Share/s/{token}",
-                ExpirationDate = shareLink.ExpirationDate,
-                IsPasswordProtected = !string.IsNullOrEmpty(shareLink.PasswordHash)
-            };
+            return MapToResponseDto(shareLink);
         }
 
-        public async Task<(Stream FileStream, string ContentType, string FileName)> DownloadByTokenAsync(string token, string? password = null)
+        public async Task<(Stream FileStream, string ContentType, string FileName)> DownloadSharedFileAsync(string token, string? password = null)
         {
-            var shareLink = await _shareLinkRepository.GetByTokenWithRelationsAsync(token);
+            var shareLink = await GetValidatedShareLinkAsync(token, password, requireFile: true);
+            return await GetStreamAndContentTypeAsync(shareLink.File!);
+        }
 
-            if (shareLink == null || (shareLink.ExpirationDate.HasValue && shareLink.ExpirationDate.Value < DateTime.UtcNow))
-            {
-                throw new NotFoundException("Share link", token);
-            }
+        public async Task<string> PrepareSharedFolderZipAsync(string token, string? password = null)
+        {
+            var shareLink = await GetValidatedShareLinkAsync(token, password, requireFolder: true);
 
-            if (!string.IsNullOrEmpty(shareLink.PasswordHash))
-            {
-                if (string.IsNullOrEmpty(password) || !BCrypt.Net.BCrypt.Verify(password, shareLink.PasswordHash))
-                {
-                    throw new ValidationException("Invalid password for share link.");
-                }
-            }
-
-            if (shareLink.FileId.HasValue)
-            {
-                var stream = await _fileStorageService.GetFileStreamAsync(shareLink.File!.PhysicalPath);
-
-                shareLink.DownloadCount++;
-                await _shareLinkRepository.SaveChangesAsync();
-
-                var provider = new FileExtensionContentTypeProvider();
-                if (!provider.TryGetContentType(shareLink.File.Name, out var contentType))
-                {
-                    contentType = "application/octet-stream";
-                }
-
-                return (stream, contentType, shareLink.File.Name);
-            }
-
-            if (shareLink.FolderId.HasValue)
-            {
-                shareLink.DownloadCount++;
-                await _shareLinkRepository.SaveChangesAsync();
-
-                var memoryStream = new MemoryStream();
-                using (var archive = new ZipArchive(memoryStream, ZipArchiveMode.Create, leaveOpen: true))
-                {
-                    await AddFolderToArchiveAsync(archive, shareLink.FolderId.Value, shareLink.OwnerId, "");
-                }
-
-                memoryStream.Position = 0;
-
-                return (memoryStream, "application/zip", $"{shareLink.Folder!.Name}.zip");
-            }
-
-            throw new ValidationException("Invalid share link structure.");
+            return await GenerateTempZipAsync(shareLink);
         }
 
         public async Task<(Stream FileStream, string ContentType, string FileName)> DownloadSharedItemAsync(string token, Guid fileId, string? password = null, int? targetFolderId = null)
         {
-            var folderContent = await GetSharedFolderContentAsync(token, password, targetFolderId);
+            var shareLink = await GetValidatedShareLinkAsync(token, password, requireFolder: true);
 
-            var targetItem = folderContent.FirstOrDefault(x => !x.IsFolder && x.OriginalId == fileId.ToString());
+            var file = await ValidateAndGetFolderItemAsync(shareLink, fileId, targetFolderId);
 
-            if (targetItem == null)
+            return await GetStreamAndContentTypeAsync(file);
+        }
+
+        public async Task<IEnumerable<SharedItemDto>> GetSharedFolderContentAsync(string token, string? password = null, int? folderId = null)
+        {
+            var shareLink = await GetValidatedShareLinkAsync(token, password, requireFolder: true);
+
+            return await FetchAndMapFolderContentAsync(shareLink, folderId);
+        }
+
+        public async Task<ShareLinkInfoDto> GetShareLinkInfoAsync(string token)
+        {
+            var shareLink = await FetchShareLinkOrThrowAsync(token);
+
+            return MapToInfoDto(shareLink);
+        }
+
+
+        private string GetCurrentUserId()
+        {
+            return _currentUserService.UserId ?? throw new ValidationException("User must be authenticated.");
+        }
+
+        private void ValidateCreationRules(CreateShareLinkDto dto)
+        {
+            if (dto.FileId == null && dto.FolderId == null)
             {
-                throw new ValidationException("File not found in the shared folder or access denied.");
+                throw new ValidationException("You must provide either a FileId or a FolderId.");
+            }
+                
+            if (dto.FileId != null && dto.FolderId != null)
+            {
+                throw new ValidationException("Cannot share both a file and a folder in a single link.");
+            }
+        }
+
+        private async Task<ShareLinkEntity> BuildAndSaveShareLinkAsync(CreateShareLinkDto dto, string userId)
+        {
+            var shareLink = new ShareLinkEntity
+            {
+                Id = Guid.NewGuid(),
+                Token = Guid.NewGuid().ToString("N").Substring(0, 12),
+                OwnerId = userId,
+                CreatedAt = DateTime.UtcNow,
+                ExpirationDate = dto.ExpirationHours.HasValue ? DateTime.UtcNow.AddHours(dto.ExpirationHours.Value) : null,
+                PasswordHash = !string.IsNullOrEmpty(dto.Password) ? BCrypt.Net.BCrypt.HashPassword(dto.Password) : null,
+                FileId = dto.FileId,
+                FolderId = dto.FolderId
+            };
+
+            await VerifyLinkTargetExistsAsync(shareLink, userId);
+
+            await _shareLinkRepository.AddAsync(shareLink);
+            await _shareLinkRepository.SaveChangesAsync();
+
+            return shareLink;
+        }
+
+        private async Task VerifyLinkTargetExistsAsync(ShareLinkEntity link, string userId)
+        {
+            if (link.FileId.HasValue)
+            {
+                _ = await _fileRepository.GetByIdAsync(link.FileId.Value, userId) ?? throw new NotFoundException("File", link.FileId.Value);
+            }
+                
+            if (link.FolderId.HasValue)
+            {
+                _ = await _folderRepository.GetByIdAsync(link.FolderId.Value, userId) ?? throw new NotFoundException("Folder", link.FolderId.Value);
+            }
+        }
+
+        private async Task<ShareLinkEntity> GetValidatedShareLinkAsync(string token, string? password, bool requireFolder = false, bool requireFile = false)
+        {
+            var link = await FetchShareLinkOrThrowAsync(token);
+
+            if (!string.IsNullOrEmpty(link.PasswordHash) && (string.IsNullOrEmpty(password) || !BCrypt.Net.BCrypt.Verify(password, link.PasswordHash)))
+            {
+                throw new ValidationException("Invalid password for share link.");
             }
 
-            var shareLink = await _shareLinkRepository.GetByTokenAsync(token);
-            var file = await _fileRepository.GetByIdAsync(fileId, shareLink!.OwnerId);
-
-            if (file == null)
-                throw new NotFoundException("File", fileId);
-
-            var stream = await _fileStorageService.GetFileStreamAsync(file.PhysicalPath);
-
-            var provider = new FileExtensionContentTypeProvider();
-            if (!provider.TryGetContentType(file.Name, out var contentType))
+            if (requireFolder && !link.FolderId.HasValue)
             {
-                contentType = "application/octet-stream";
+                throw new ValidationException("This share link does not point to a folder.");
+            }
+
+            if (requireFile && !link.FileId.HasValue)
+            {
+                throw new ValidationException("This share link does not point to a file.");
+            }
+
+            return link;
+        }
+
+        private async Task<ShareLinkEntity> FetchShareLinkOrThrowAsync(string token)
+        {
+            var link = await _shareLinkRepository.GetByTokenWithRelationsAsync(token);
+
+            if (link == null || (link.ExpirationDate.HasValue && link.ExpirationDate.Value < DateTime.UtcNow))
+            {
+                throw new NotFoundException("Share link not found or expired.");
+            }
+                
+            return link;
+        }
+
+        private async Task<string> GenerateTempZipAsync(ShareLinkEntity shareLink)
+        {
+            string tempPath = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid()}.zip");
+
+            using (var fs = new FileStream(tempPath, FileMode.Create))
+            using (var archive = new ZipArchive(fs, ZipArchiveMode.Create))
+            {
+                await AddFolderToArchiveAsync(archive, shareLink.FolderId!.Value, shareLink.OwnerId, "");
             }
 
             shareLink.DownloadCount++;
             await _shareLinkRepository.SaveChangesAsync();
 
+            return Path.GetFileName(tempPath);
+        }
+
+        private async Task<FileEntity> ValidateAndGetFolderItemAsync(ShareLinkEntity shareLink, Guid fileId, int? targetFolderId)
+        {
+            var actualFolderId = targetFolderId ?? shareLink.FolderId!.Value;
+            var filesInFolder = await _fileRepository.GetByFolderIdAsync(actualFolderId, shareLink.OwnerId);
+
+            var file = filesInFolder.FirstOrDefault(f => f.Id == fileId)
+                ?? throw new ValidationException("File not found in the shared folder or access denied.");
+
+            shareLink.DownloadCount++;
+            await _shareLinkRepository.SaveChangesAsync();
+
+            return file;
+        }
+
+        private async Task<(Stream, string, string)> GetStreamAndContentTypeAsync(FileEntity file)
+        {
+            var stream = await _fileStorageService.GetFileStreamAsync(file.PhysicalPath);
+            var provider = new FileExtensionContentTypeProvider();
+
+            if (!provider.TryGetContentType(file.Name, out var contentType))
+            {
+                contentType = "application/octet-stream";
+            }
+
             return (stream, contentType, file.Name);
         }
 
-        public async Task<IEnumerable<SharedItemDto>> GetSharedFolderContentAsync(string token, string? password = null, int ? folderId = null)
+        private async Task<IEnumerable<SharedItemDto>> FetchAndMapFolderContentAsync(ShareLinkEntity shareLink, int? folderId)
         {
-            var shareLink = await _shareLinkRepository.GetByTokenWithRelationsAsync(token);
-
-            if (shareLink == null || (shareLink.ExpirationDate.HasValue && shareLink.ExpirationDate.Value < DateTime.UtcNow))
-            {
-                throw new NotFoundException("Share link", token);
-            }
-
-            if (!shareLink.FolderId.HasValue)
-            {
-                throw new ValidationException("This share link does not point to a folder.");
-            }
-
-            if (!string.IsNullOrEmpty(shareLink.PasswordHash))
-            {
-                if (string.IsNullOrEmpty(password) || !BCrypt.Net.BCrypt.Verify(password, shareLink.PasswordHash))
-                {
-                    throw new ValidationException("Invalid password for share link.");
-                }
-            }
-
-            var actualFolderId = folderId ?? shareLink.FolderId.Value;
+            var actualFolderId = folderId ?? shareLink.FolderId!.Value;
 
             if (folderId.HasValue)
             {
-                var folderCheck = await _folderRepository.GetByIdAsync(folderId.Value, shareLink.OwnerId).EnsureExistsAsync(() => "Folder not found");
+                _ = await _folderRepository.GetByIdAsync(folderId.Value, shareLink.OwnerId).EnsureExistsAsync(() => "Folder not found");
             }
-
+                
             var folders = await _folderRepository.GetByParentIdAsync(actualFolderId, shareLink.OwnerId);
             var files = await _fileRepository.GetByFolderIdAsync(actualFolderId, shareLink.OwnerId);
 
-            var result = new List<SharedItemDto>();
+            var items = folders.Select(f => new SharedItemDto 
+            { 
+                Id = $"folder_{f.Id}", 
+                OriginalId = f.Id.ToString(), 
+                Name = f.Name, 
+                IsFolder = true, 
+                Size = 0, 
+                CreatedAt = f.CreatedAt 
+            })
+            .Concat(files.Select(f => new SharedItemDto 
+            { 
+                Id = $"file_{f.Id}", 
+                OriginalId = f.Id.ToString(),
+                Name = f.Name,
+                IsFolder = false, 
+                Size = f.Size, 
+                CreatedAt = f.CreatedAt 
+            }));
 
-            foreach (var folder in folders)
-            {
-                result.Add(new SharedItemDto
-                {
-                    Id = $"folder_{folder.Id}",
-                    OriginalId = folder.Id.ToString(),
-                    Name = folder.Name,
-                    IsFolder = true,
-                    Size = 0,
-                    CreatedAt = folder.CreatedAt
-                });
-            }
-
-            foreach (var file in files)
-            {
-                result.Add(new SharedItemDto
-                {
-                    Id = $"file_{file.Id}",
-                    OriginalId = file.Id.ToString(),
-                    Name = file.Name,
-                    IsFolder = false,
-                    Size = file.Size,
-                    CreatedAt = file.CreatedAt
-                });
-            }
-
-            return result
-                .OrderByDescending(x => x.IsFolder)
-                .ThenBy(x => x.Name);
+            return items.OrderByDescending(x => x.IsFolder).ThenBy(x => x.Name);
         }
 
-        public async Task<ShareLinkInfoDto> GetShareLinkInfoAsync(string token)
+        private ShareLinkResponseDto MapToResponseDto(ShareLinkEntity link) => new()
         {
-            var shareLink = await _shareLinkRepository.GetByTokenWithRelationsAsync(token);
+            Token = link.Token,
+            DownloadUrl = $"/api/Share/s/{link.Token}",
+            ExpirationDate = link.ExpirationDate,
+            IsPasswordProtected = !string.IsNullOrEmpty(link.PasswordHash)
+        };
 
-            if (shareLink == null || (shareLink.ExpirationDate.HasValue && shareLink.ExpirationDate.Value < DateTime.UtcNow))
-            {
-                throw new NotFoundException("Share link not found or expired.");
-            }
-
-            bool isFolder = shareLink.FolderId.HasValue;
-            string name = isFolder ? shareLink.Folder!.Name : shareLink.File!.Name;
-            long? size = isFolder ? null : shareLink.File!.Size;
-
+        private ShareLinkInfoDto MapToInfoDto(ShareLinkEntity link)
+        {
+            bool isFolder = link.FolderId.HasValue;
             return new ShareLinkInfoDto
             {
-                FileName = name,
+                FileName = isFolder ? link.Folder!.Name : link.File!.Name,
                 IsFolder = isFolder,
-                Size = size,
-                IsPasswordProtected = !string.IsNullOrEmpty(shareLink.PasswordHash),
-                ExpirationDate = shareLink.ExpirationDate
+                Size = isFolder ? null : link.File!.Size,
+                IsPasswordProtected = !string.IsNullOrEmpty(link.PasswordHash),
+                ExpirationDate = link.ExpirationDate
             };
         }
 
@@ -267,14 +273,10 @@ namespace EasyDisk.Infrastructure.Services
             var files = await _fileRepository.GetByFolderIdAsync(folderId, ownerId);
             foreach (var file in files)
             {
-                var entryName = Path.Combine(currentPath, file.Name);
-                var entry = archive.CreateEntry(entryName, CompressionLevel.Optimal);
-
-                using (var entryStream = entry.Open())
-                using (var fileStream = await _fileStorageService.GetFileStreamAsync(file.PhysicalPath))
-                {
-                    await fileStream.CopyToAsync(entryStream);
-                }
+                var entry = archive.CreateEntry(Path.Combine(currentPath, file.Name), CompressionLevel.Optimal);
+                using var entryStream = entry.Open();
+                using var fileStream = await _fileStorageService.GetFileStreamAsync(file.PhysicalPath);
+                await fileStream.CopyToAsync(entryStream);
             }
 
             var subFolders = await _folderRepository.GetByParentIdAsync(folderId, ownerId);

@@ -21,6 +21,11 @@ namespace EasyDisk.Infrastructure.Repositories
             await Task.CompletedTask;
         }
 
+        public async Task AddFileVersionAsync(FileVersionEntity version)
+        {
+            await _dbContext.FileVersions.AddAsync(version);
+        }
+
         public void Delete(FileEntity file)
         {
             _dbContext.Files.Remove(file);
@@ -70,8 +75,20 @@ namespace EasyDisk.Infrastructure.Repositories
         {
             var query = _dbContext.Files
                 .Include(f => f.Tags)
-                .Where(f => f.OwnerId == ownerId)
+                .Where(f => f.OwnerId == ownerId && f.DeletedAt == null)
                 .AsQueryable();
+
+            if (string.IsNullOrWhiteSpace(searchTerm.SearchTerm))
+            {
+                query = query.Where(f => f.FolderId == searchTerm.FolderId);
+            }
+            else
+            {
+                if (searchTerm.FolderId.HasValue)
+                {
+                    query = query.Where(f => f.FolderId == searchTerm.FolderId);
+                }
+            }
 
             if (!string.IsNullOrWhiteSpace(searchTerm.SearchTerm))
             {
@@ -83,11 +100,6 @@ namespace EasyDisk.Infrastructure.Repositories
                 query = query.Where(f => f.Extension == searchTerm.Extension);
             }
 
-            if (searchTerm.FolderId.HasValue)
-            {
-                query = query.Where(f => f.FolderId == searchTerm.FolderId);
-            }
-
             if (searchTerm.TagIds != null && searchTerm.TagIds.Any())
             {
                 foreach (var tagId in searchTerm.TagIds)
@@ -96,7 +108,35 @@ namespace EasyDisk.Infrastructure.Repositories
                 }
             }
 
+            query = searchTerm.SortBy?.ToLower() switch
+            {
+                "name" => searchTerm.SortDescending ? query.OrderByDescending(f => f.Name) : query.OrderBy(f => f.Name),
+                "size" => searchTerm.SortDescending ? query.OrderByDescending(f => f.Size) : query.OrderBy(f => f.Size),
+                "date" => searchTerm.SortDescending ? query.OrderByDescending(f => f.CreatedAt) : query.OrderBy(f => f.CreatedAt),
+                _ => query.OrderByDescending(f => f.CreatedAt)
+            };
+
             return await query.ToListAsync();
+        }
+
+        public async Task<List<FileEntity>> GetDeletedFilesAsync(string userId)
+        {
+            return await _dbContext.Files
+                .Where(f => f.OwnerId == userId && f.DeletedAt != null)
+                .ToListAsync();
+        }
+
+        public async Task<FileEntity?> GetDeletedFileByIdAsync(Guid id, string userId)
+        {
+            return await _dbContext.Files
+                .FirstOrDefaultAsync(f => f.Id == id && f.OwnerId == userId && f.DeletedAt != null);
+        }
+
+        public Task UpdateAsync(FileEntity file)
+        {
+            _dbContext.Files.Update(file);
+
+            return Task.CompletedTask;
         }
 
         public async Task SaveChangesAsync()

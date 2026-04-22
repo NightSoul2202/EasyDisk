@@ -12,5 +12,6 @@ namespace EasyDisk.Application.DTOs
         public int VersionNumber { get; set; }
         public long Size { get; set; }
         public DateTime UploadedAt { get; set; }
+        public bool IsCurrent { get; set; }
     }
 }

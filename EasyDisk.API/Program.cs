@@ -122,6 +122,7 @@ namespace EasyDisk.API
             builder.Services.AddScoped<IAuditService, AuditService>();
             builder.Services.AddScoped<IShareLinkService, ShareLinkService>();
             builder.Services.AddScoped<IShareLinkRepository, ShareLinkRepository>();
+            builder.Services.AddScoped<ITrashService, TrashService>();
 
             builder.Services.AddHttpContextAccessor();
 

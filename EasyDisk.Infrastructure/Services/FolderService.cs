@@ -59,19 +59,21 @@ namespace EasyDisk.Application.Services
             };
         }
 
-        public async Task<(Stream ZipStream, string ZipName)> DownloadFolderAsync(int folderId, string userId)
+        public async Task<string> PrepareZipTaskAsync(int folderId, string userId)
         {
-            var rootFolder = await _folderRepository.GetByIdAsync(folderId, userId).EnsureExistsAsync(() => $"Folder with id {folderId} not found.");
+            var folder = await _folderRepository.GetByIdAsync(folderId, userId);
 
-            var memoryStream = new MemoryStream();
+            string tempPath = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid()}.zip");
 
-            using (var archive = new ZipArchive(memoryStream, ZipArchiveMode.Create, leaveOpen: true))
+            using (var fs = new FileStream(tempPath, FileMode.Create))
             {
-                await AddFolderToArchive(archive, folderId, "", userId);
+                using (var archive = new ZipArchive(fs, ZipArchiveMode.Create))
+                {
+                    await AddFolderToArchive(archive, folderId, "", userId);
+                }
             }
 
-            memoryStream.Position = 0;
-            return (memoryStream, $"{rootFolder.Name}.zip");
+            return Path.GetFileName(tempPath);
         }
 
         public async Task<IEnumerable<FolderResponseDto>> GetFoldersAsync(int? parentFolderId = null)
@@ -147,6 +149,45 @@ namespace EasyDisk.Application.Services
                 ParentFolderId = folder.ParentFolderId,
                 CreatedAt = folder.CreatedAt
             };
+        }
+
+        public async Task MoveFolderAsync(int folderId, int? targetParentId)
+        {
+            var userId = _currentUserService.UserId ?? throw new ValidationException("User not found");
+
+            var folderToMove = await _folderRepository.GetByIdAsync(folderId, userId)
+                ?? throw new NotFoundException("Folder", folderId);
+
+            if (!targetParentId.HasValue)
+            {
+                folderToMove.ParentFolderId = null;
+                await _folderRepository.UpdateAsync(folderToMove);
+                await _folderRepository.SaveChangesAsync();
+                return;
+            }
+
+            if (folderId == targetParentId.Value)
+            {
+                throw new ValidationException("You cannot move a folder into itself.");
+            }
+
+            var currentParentId = targetParentId;
+            while (currentParentId.HasValue)
+            {
+                var parent = await _folderRepository.GetByIdAsync(currentParentId.Value, userId)
+                    ?? throw new NotFoundException("Target folder path is invalid.");
+
+                if (parent.Id == folderId)
+                {
+                    throw new ValidationException("You cannot move a folder into its own subfolder.");
+                }
+
+                currentParentId = parent.ParentFolderId;
+            }
+
+            folderToMove.ParentFolderId = targetParentId;
+            await _folderRepository.UpdateAsync(folderToMove);
+            await _folderRepository.SaveChangesAsync();
         }
 
         public async Task SoftDeleteFolderAsync(int folderId)

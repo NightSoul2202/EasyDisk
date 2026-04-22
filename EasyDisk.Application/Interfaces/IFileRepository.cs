@@ -17,7 +17,11 @@ namespace EasyDisk.Application.Interfaces
         Task<FileEntity?> GetByIdWithVersionsAsync(Guid id, string ownerId);
         Task<bool> IsNameTakenAsync(string name, string extension, int? folderId, string ownerId, Guid? excludeFileId = null);
         Task<List<FileEntity>> SearchFilesAsync(FileSearchParametersDto searchTerm, string ownerId);
+        Task<List<FileEntity>> GetDeletedFilesAsync(string userId);
+        Task<FileEntity?> GetDeletedFileByIdAsync(Guid id, string userId);
+        Task UpdateAsync(FileEntity file);
 
+        Task AddFileVersionAsync(FileVersionEntity version);
         Task AddAsync(FileEntity file);
         Task SaveChangesAsync();
         void Delete(FileEntity file);

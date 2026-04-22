@@ -12,5 +12,7 @@ namespace EasyDisk.Application.DTOs
         public string? Extension { get; set; }
         public int? FolderId { get; set; }
         public List<int>? TagIds { get; set; }
+        public string? SortBy { get; set; }
+        public bool SortDescending { get; set; } = false;
     }
 }
