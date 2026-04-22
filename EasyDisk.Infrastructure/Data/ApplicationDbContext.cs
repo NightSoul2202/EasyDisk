@@ -47,6 +47,24 @@ namespace EasyDisk.Infrastructure.Data
                 .HasMany(f => f.Tags)
                 .WithMany(t => t.Files)
                 .UsingEntity(j => j.ToTable("FileTags"));
+
+            builder.Entity<ShareLinkEntity>()
+                .HasOne(s => s.File)
+                .WithMany(f => f.ShareLinks)
+                .HasForeignKey(s => s.FileId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            builder.Entity<ShareLinkEntity>()
+                .HasOne(s => s.Folder)
+                .WithMany()
+                .HasForeignKey(s => s.FolderId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            builder.Entity<FileVersionEntity>()
+                .HasOne(v => v.File)
+                .WithMany(f => f.Versions)
+                .HasForeignKey(v => v.FileId)
+                .OnDelete(DeleteBehavior.Cascade);
         }
     }
 }

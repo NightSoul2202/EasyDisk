@@ -1,7 +1,8 @@
-﻿using EasyDisk.Application.DTOs;
+﻿using EasyDisk.Application.DTOs.Auth;
 using EasyDisk.Application.Exceptions;
 using EasyDisk.Application.Extensions;
-using EasyDisk.Application.Interfaces;
+using EasyDisk.Application.Interfaces.Admin;
+using EasyDisk.Application.Interfaces.Audit;
 using EasyDisk.Infrastructure.Identity.Entities;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;

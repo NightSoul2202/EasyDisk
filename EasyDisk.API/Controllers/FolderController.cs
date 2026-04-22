@@ -1,6 +1,7 @@
 ﻿using EasyDisk.API.Filters;
 using EasyDisk.Application.DTOs;
-using EasyDisk.Application.Interfaces;
+using EasyDisk.Application.DTOs.Files;
+using EasyDisk.Application.Interfaces.Files;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Caching.Memory;

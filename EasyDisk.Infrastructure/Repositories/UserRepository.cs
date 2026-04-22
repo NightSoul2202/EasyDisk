@@ -1,4 +1,4 @@
-﻿using EasyDisk.Application.Interfaces;
+﻿using EasyDisk.Application.Interfaces.Auth;
 using EasyDisk.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using System;

@@ -1,5 +1,4 @@
-﻿using EasyDisk.Application.Interfaces;
-using EasyDisk.Domain.Entities;
+﻿using EasyDisk.Domain.Entities;
 using EasyDisk.Infrastructure.Data;
 using System;
 using System.Collections.Generic;
@@ -7,6 +6,7 @@ using Microsoft.EntityFrameworkCore;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using EasyDisk.Application.Interfaces.Files;
 
 namespace EasyDisk.Infrastructure.Repositories
 {
@@ -71,14 +71,40 @@ namespace EasyDisk.Infrastructure.Repositories
         public async Task<List<FolderEntity>> GetDeletedFoldersAsync(string userId)
         {
             return await _dbContext.Folders
-                .Where(f => f.OwnerId == userId && f.DeletedAt != null)
+                .IgnoreQueryFilters()
+                .Where(f => f.OwnerId == userId && f.DeletedAt != null &&
+                           (f.ParentFolderId == null || f.ParentFolder.DeletedAt == null))
                 .ToListAsync();
         }
 
         public async Task<FolderEntity?> GetDeletedFolderByIdAsync(int id, string userId)
         {
             return await _dbContext.Folders
+                .IgnoreQueryFilters()
                 .FirstOrDefaultAsync(f => f.Id == id && f.OwnerId == userId && f.DeletedAt != null);
+        }
+
+        public async Task<FolderEntity?> GetByIdIncludingDeletedAsync(int id, string userId)
+        {
+            return await _dbContext.Folders
+                .IgnoreQueryFilters()
+                .FirstOrDefaultAsync(f => f.Id == id && f.OwnerId == userId && f.DeletedAt != null);
+        }
+
+        public async Task<FolderEntity?> GetByIdWithFilesIncludingDeletedAsync(int id, string userId)
+        {
+            return await _dbContext.Folders
+                .IgnoreQueryFilters()
+                .Include(f => f.Files)
+                .FirstOrDefaultAsync(f => f.Id == id && f.OwnerId == userId);
+        }
+
+        public async Task<List<FolderEntity>> GetByParentIdIncludingDeletedAsync(int parentId, string userId)
+        {
+            return await _dbContext.Folders
+                .IgnoreQueryFilters()
+                .Where(f => f.ParentFolderId == parentId && f.OwnerId == userId)
+                .ToListAsync();
         }
 
         public Task UpdateAsync(FolderEntity folder)

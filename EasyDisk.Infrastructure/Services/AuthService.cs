@@ -1,7 +1,10 @@
 ﻿using EasyDisk.Application.DTOs;
+using EasyDisk.Application.DTOs.Auth;
 using EasyDisk.Application.Exceptions;
 using EasyDisk.Application.Extensions;
-using EasyDisk.Application.Interfaces;
+using EasyDisk.Application.Interfaces.Audit;
+using EasyDisk.Application.Interfaces.Auth;
+using EasyDisk.Application.Interfaces.EmailSender;
 using EasyDisk.Infrastructure.Identity.Entities;
 using EasyDisk.Infrastructure.Services;
 using Google.Apis.Auth;
@@ -140,6 +143,20 @@ namespace EasyDisk.Infrastructure.Identity.Services
                 await _userManager.UpdateAsync(user);
             }
 
+            if (user.TwoFactorEnabled)
+            {
+                if (string.IsNullOrEmpty(googleLoginDto.Code))
+                {
+                    return new AuthResponseDto
+                    {
+                        RequiresTwoFactor = true,
+                        Email = user.Email
+                    };
+                }
+
+                await ProcessTwoFactorAuth(user, googleLoginDto.Code);
+            }
+
             var token = await GenerateJwtTokenAsync(user);
 
             await _auditService.LogAsync(
@@ -154,7 +171,8 @@ namespace EasyDisk.Infrastructure.Identity.Services
             {
                 Token = token,
                 Email = user.Email,
-                UserId = user.Id
+                UserId = user.Id,
+                RequiresTwoFactor = false
             };
         }
 

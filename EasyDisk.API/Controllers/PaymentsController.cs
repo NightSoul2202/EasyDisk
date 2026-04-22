@@ -1,4 +1,4 @@
-﻿using EasyDisk.Application.Interfaces;
+﻿using EasyDisk.Application.Interfaces.Payment;
 using Microsoft.AspNetCore.Mvc;
 
 namespace EasyDisk.API.Controllers

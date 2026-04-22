@@ -1,6 +1,7 @@
-﻿using EasyDisk.Application.DTOs;
+﻿using EasyDisk.Application.DTOs.Files;
 using EasyDisk.Application.Exceptions;
-using EasyDisk.Application.Interfaces;
+using EasyDisk.Application.Interfaces.Auth;
+using EasyDisk.Application.Interfaces.Files;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -67,24 +68,13 @@ namespace EasyDisk.Infrastructure.Services
 
             if (isFolder)
             {
-                if (!int.TryParse(id, out int folderId))
-                {
-                    throw new ValidationException("Invalid folder ID");
-                }
+                if (!int.TryParse(id, out int folderId)) throw new ValidationException("Invalid folder ID");
 
-                var folder = await _folderRepository.GetDeletedFolderByIdAsync(folderId, userId)
-                    ?? throw new NotFoundException("Folder in trash", folderId);
-
-                folder.DeletedAt = null;
-                await _folderRepository.UpdateAsync(folder);
-                await _folderRepository.SaveChangesAsync();
+                await _folderService.RestoreFolderAsync(folderId);
             }
             else
             {
-                if (!Guid.TryParse(id, out Guid fileId))
-                {
-                    throw new ValidationException("Invalid file ID");
-                }
+                if (!Guid.TryParse(id, out Guid fileId)) throw new ValidationException("Invalid file ID");
 
                 var file = await _fileRepository.GetDeletedFileByIdAsync(fileId, userId)
                     ?? throw new NotFoundException("File in trash", fileId);

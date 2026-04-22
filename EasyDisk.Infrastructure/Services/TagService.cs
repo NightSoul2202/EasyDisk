@@ -1,7 +1,10 @@
 ﻿using EasyDisk.Application.DTOs;
+using EasyDisk.Application.DTOs.Tag;
 using EasyDisk.Application.Exceptions;
 using EasyDisk.Application.Extensions;
-using EasyDisk.Application.Interfaces;
+using EasyDisk.Application.Interfaces.Auth;
+using EasyDisk.Application.Interfaces.Files;
+using EasyDisk.Application.Interfaces.Tag;
 using EasyDisk.Domain.Entities;
 using System;
 using System.Collections.Generic;

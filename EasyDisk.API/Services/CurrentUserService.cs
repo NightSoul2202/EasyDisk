@@ -1,4 +1,4 @@
-﻿using EasyDisk.Application.Interfaces;
+﻿using EasyDisk.Application.Interfaces.Auth;
 using System.Security.Claims;
 
 namespace EasyDisk.API.Services

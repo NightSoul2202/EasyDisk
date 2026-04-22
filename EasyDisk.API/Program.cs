@@ -1,6 +1,12 @@
 using EasyDisk.API.Middlewares;
 using EasyDisk.API.Services;
-using EasyDisk.Application.Interfaces;
+using EasyDisk.Application.Interfaces.Audit;
+using EasyDisk.Application.Interfaces.Auth;
+using EasyDisk.Application.Interfaces.EmailSender;
+using EasyDisk.Application.Interfaces.Files;
+using EasyDisk.Application.Interfaces.Payment;
+using EasyDisk.Application.Interfaces.Share;
+using EasyDisk.Application.Interfaces.Tag;
 using EasyDisk.Application.Services;
 using EasyDisk.Infrastructure.Data;
 using EasyDisk.Infrastructure.Identity.Entities;

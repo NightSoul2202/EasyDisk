@@ -1,7 +1,10 @@
 ﻿using EasyDisk.Application.DTOs;
+using EasyDisk.Application.DTOs.Files;
 using EasyDisk.Application.Exceptions;
 using EasyDisk.Application.Extensions;
-using EasyDisk.Application.Interfaces;
+using EasyDisk.Application.Interfaces.Auth;
+using EasyDisk.Application.Interfaces.Files;
+using EasyDisk.Application.Interfaces.Share;
 using EasyDisk.Domain.Entities;
 using EasyDisk.Infrastructure.Data;
 using Microsoft.AspNetCore.StaticFiles;
@@ -25,14 +28,16 @@ namespace EasyDisk.Infrastructure.Services
         private readonly IUserRepository _userRepository;
         private readonly ICurrentUserService _currentUserService;
         private readonly IFileStorageService _fileStorageService;
+        private readonly IShareLinkRepository _shareLinkRepository;
 
-        public FileService(IFileRepository fileRepository, IFolderRepository folderRepository, ICurrentUserService currentUserService, IFileStorageService fileStorageService, IUserRepository userRepository)
+        public FileService(IFileRepository fileRepository, IFolderRepository folderRepository, ICurrentUserService currentUserService, IFileStorageService fileStorageService, IUserRepository userRepository, IShareLinkRepository shareLinkRepository)
         {
             _fileRepository = fileRepository;
             _folderRepository = folderRepository;
             _currentUserService = currentUserService;
             _fileStorageService = fileStorageService;
             _userRepository = userRepository;
+            _shareLinkRepository = shareLinkRepository;
         }
 
         public async Task<IEnumerable<FileResponseDto>> GetFilesAsync(int? folderId = null)
@@ -80,7 +85,9 @@ namespace EasyDisk.Infrastructure.Services
         {
             var userId = _currentUserService.UserId ?? throw new ValidationException("User must be authenticated to delete file.");
 
-            var file = await _fileRepository.GetByIdWithTagsAsync(fileId, userId).EnsureExistsAsync(() => $"File with id {fileId} not found.");
+            var file = await _fileRepository.GetByIdIncludingDeletedAsync(fileId, userId).EnsureExistsAsync(() => $"File with id {fileId} not found.");
+
+            await _shareLinkRepository.DeleteLinksForFileAsync(fileId);
 
             await _userRepository.UpdateUserQuotaAsync(userId, -file.Size);
 
@@ -98,6 +105,8 @@ namespace EasyDisk.Infrastructure.Services
             var file = await _fileRepository.GetByIdWithTagsAsync(fileId, userId).EnsureExistsAsync(() => $"File with id {fileId} not found.");
 
             file.DeletedAt = DateTime.UtcNow;
+
+            await _shareLinkRepository.DeleteLinksForFileAsync(fileId);
 
             await _fileRepository.SaveChangesAsync();
         }

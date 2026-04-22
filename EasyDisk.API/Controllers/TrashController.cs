@@ -1,5 +1,5 @@
 ﻿using EasyDisk.API.Filters;
-using EasyDisk.Application.Interfaces;
+using EasyDisk.Application.Interfaces.Files;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 

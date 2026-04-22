@@ -1,5 +1,5 @@
-﻿using EasyDisk.Application.DTOs;
-using EasyDisk.Application.Interfaces;
+﻿using EasyDisk.Application.DTOs.Files;
+using EasyDisk.Application.Interfaces.Files;
 using EasyDisk.Domain.Entities;
 using EasyDisk.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
@@ -122,13 +122,23 @@ namespace EasyDisk.Infrastructure.Repositories
         public async Task<List<FileEntity>> GetDeletedFilesAsync(string userId)
         {
             return await _dbContext.Files
-                .Where(f => f.OwnerId == userId && f.DeletedAt != null)
-                .ToListAsync();
+                 .IgnoreQueryFilters()
+                 .Where(f => f.OwnerId == userId && f.DeletedAt != null &&
+                            (f.FolderId == null || f.Folder.DeletedAt == null))
+                 .ToListAsync();
         }
 
         public async Task<FileEntity?> GetDeletedFileByIdAsync(Guid id, string userId)
         {
             return await _dbContext.Files
+                .IgnoreQueryFilters()
+                .FirstOrDefaultAsync(f => f.Id == id && f.OwnerId == userId && f.DeletedAt != null);
+        }
+
+        public async Task<FileEntity?> GetByIdIncludingDeletedAsync(Guid id, string userId)
+        {
+            return await _dbContext.Files
+                .IgnoreQueryFilters()
                 .FirstOrDefaultAsync(f => f.Id == id && f.OwnerId == userId && f.DeletedAt != null);
         }
 

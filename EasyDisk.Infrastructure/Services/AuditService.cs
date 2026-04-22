@@ -1,4 +1,5 @@
-﻿using EasyDisk.Application.Interfaces;
+﻿using EasyDisk.Application.Interfaces.Audit;
+using EasyDisk.Application.Interfaces.Auth;
 using EasyDisk.Domain.Entities;
 using EasyDisk.Infrastructure.Data;
 using Microsoft.AspNetCore.Http;

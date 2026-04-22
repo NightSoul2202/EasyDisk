@@ -1,7 +1,10 @@
 ﻿using EasyDisk.Application.DTOs;
+using EasyDisk.Application.DTOs.Files;
 using EasyDisk.Application.Exceptions;
 using EasyDisk.Application.Extensions;
-using EasyDisk.Application.Interfaces;
+using EasyDisk.Application.Interfaces.Auth;
+using EasyDisk.Application.Interfaces.Files;
+using EasyDisk.Application.Interfaces.Share;
 using EasyDisk.Domain.Entities;
 using EasyDisk.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
@@ -18,14 +21,16 @@ namespace EasyDisk.Application.Services
         private readonly IFileRepository _fileRepository;
         private readonly IUserRepository _userRepository;
         private readonly IFileStorageService _fileStorageService;
+        private readonly IShareLinkRepository _shareLinkRepository;
 
-        public FolderService(ICurrentUserService currentUserService, IFolderRepository folderRepository, IFileRepository fileRepository, IFileStorageService fileStorageService, IUserRepository userRepository)
+        public FolderService(ICurrentUserService currentUserService, IFolderRepository folderRepository, IFileRepository fileRepository, IFileStorageService fileStorageService, IUserRepository userRepository, IShareLinkRepository shareLinkRepository)
         {
             _currentUserService = currentUserService;
             _folderRepository = folderRepository;
             _fileRepository = fileRepository;
             _fileStorageService = fileStorageService;
             _userRepository = userRepository;
+            _shareLinkRepository = shareLinkRepository;
         }
 
         public async Task<FolderResponseDto> CreateFolderAsync(CreateFolderDto createFolderDto)
@@ -205,7 +210,7 @@ namespace EasyDisk.Application.Services
         {
             var userId = _currentUserService.UserId ?? throw new ValidationException("User must be authenticated to delete a folder.");
 
-            var rootFolder = await _folderRepository.GetByIdWithFilesAsync(folderId, userId).EnsureExistsAsync(() => $"Folder with id {folderId} not found.");
+            var rootFolder = await _folderRepository.GetByIdWithFilesIncludingDeletedAsync(folderId, userId).EnsureExistsAsync(() => $"Folder with id {folderId} not found.");
 
             var totalDeletedSize = await ExecuteHardDeleteRecursiveAsync(rootFolder, userId);
 
@@ -214,21 +219,56 @@ namespace EasyDisk.Application.Services
             await _folderRepository.SaveChangesAsync();
         }
 
+        public async Task RestoreFolderAsync(int folderId)
+        {
+            var userId = _currentUserService.UserId ?? throw new ValidationException("User must be authenticated.");
+
+            await RestoreFolderRecursiveAsync(folderId, userId);
+
+            await _folderRepository.SaveChangesAsync();
+        }
+
+        private async Task RestoreFolderRecursiveAsync(int folderId, string userId)
+        {
+            var folder = await _folderRepository.GetByIdWithFilesIncludingDeletedAsync(folderId, userId);
+
+            if (folder == null || folder.DeletedAt == null) return;
+
+            folder.DeletedAt = null;
+
+            foreach (var file in folder.Files)
+            {
+                file.DeletedAt = null;
+            }
+
+            var subFolders = await _folderRepository.GetByParentIdIncludingDeletedAsync(folderId, userId);
+            foreach (var subFolder in subFolders)
+            {
+                await RestoreFolderRecursiveAsync(subFolder.Id, userId);
+            }
+        }
+
         private async Task<long> ExecuteHardDeleteRecursiveAsync(FolderEntity folder, string userId)
         {
             long totalDeletedSize = 0;
+
+            await _shareLinkRepository.DeleteLinksForFolderAsync(folder.Id);
+
             foreach (var file in folder.Files)
             {
                 totalDeletedSize += file.Size;
+
+                await _shareLinkRepository.DeleteLinksForFileAsync(file.Id);
+
                 await _fileStorageService.DeleteFileAsync(file.PhysicalPath);
                 _fileRepository.Delete(file);
             }
 
-            var subFolders = await _folderRepository.GetByParentIdAsync(folder.Id, userId);
+            var subFolders = await _folderRepository.GetByParentIdIncludingDeletedAsync(folder.Id, userId);
 
             foreach (var subFolder in subFolders)
             {
-                var detailedSubFolder = await _folderRepository.GetByIdWithFilesAsync(subFolder.Id, userId);
+                var detailedSubFolder = await _folderRepository.GetByIdWithFilesIncludingDeletedAsync(subFolder.Id, userId);
                 if (detailedSubFolder != null)
                 {
                     totalDeletedSize += await ExecuteHardDeleteRecursiveAsync(detailedSubFolder, userId);
@@ -250,9 +290,13 @@ namespace EasyDisk.Application.Services
 
             folder.DeletedAt = DateTime.UtcNow;
 
+            await _shareLinkRepository.DeleteLinksForFolderAsync(folderId);
+
             foreach (var file in folder.Files)
             {
                 file.DeletedAt = DateTime.UtcNow;
+
+                await _shareLinkRepository.DeleteLinksForFileAsync(file.Id);
             }
 
             var subFolders = await _folderRepository.GetByParentIdAsync(folderId, userId);

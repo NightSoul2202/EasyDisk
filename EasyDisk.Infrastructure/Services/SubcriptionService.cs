@@ -1,6 +1,6 @@
 ﻿using EasyDisk.Application.Exceptions;
 using EasyDisk.Application.Extensions;
-using EasyDisk.Application.Interfaces;
+using EasyDisk.Application.Interfaces.Payment;
 using EasyDisk.Domain.Constants;
 using EasyDisk.Infrastructure.Identity.Entities;
 using Microsoft.AspNetCore.Identity;

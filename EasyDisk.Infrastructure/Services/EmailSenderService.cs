@@ -1,4 +1,4 @@
-﻿using EasyDisk.Application.Interfaces;
+﻿using EasyDisk.Application.Interfaces.EmailSender;
 using MailKit.Security;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;

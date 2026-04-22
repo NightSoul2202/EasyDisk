@@ -1,4 +1,4 @@
-﻿using EasyDisk.Application.Interfaces;
+﻿using EasyDisk.Application.Interfaces.Audit;
 using Microsoft.AspNetCore.Mvc.Filters;
 
 namespace EasyDisk.API.Filters

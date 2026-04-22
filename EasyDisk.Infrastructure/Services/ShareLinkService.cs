@@ -1,7 +1,10 @@
 ﻿using EasyDisk.Application.DTOs;
+using EasyDisk.Application.DTOs.Share;
 using EasyDisk.Application.Exceptions;
 using EasyDisk.Application.Extensions;
-using EasyDisk.Application.Interfaces;
+using EasyDisk.Application.Interfaces.Auth;
+using EasyDisk.Application.Interfaces.Files;
+using EasyDisk.Application.Interfaces.Share;
 using EasyDisk.Domain.Entities;
 using EasyDisk.Infrastructure.Repositories;
 using Microsoft.AspNetCore.StaticFiles;

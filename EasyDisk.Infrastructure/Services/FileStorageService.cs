@@ -1,4 +1,4 @@
-﻿using EasyDisk.Application.Interfaces;
+﻿using EasyDisk.Application.Interfaces.Files;
 using EasyDisk.Infrastructure.Exceptions;
 using Microsoft.Extensions.Configuration;
 using System;
