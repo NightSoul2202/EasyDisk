@@ -42,5 +42,14 @@ namespace EasyDisk.API.Controllers
 
             return Ok(logs);
         }
+
+        [HttpGet]
+        [Route("stats")]
+        public async Task<IActionResult> GetDashboardStats()
+        {
+            var stats = await _adminService.GetDashboardStatsAsync();
+
+            return Ok(stats);
+        }
     }
 }

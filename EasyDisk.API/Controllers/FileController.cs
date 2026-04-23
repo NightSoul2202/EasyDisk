@@ -112,6 +112,22 @@ namespace EasyDisk.API.Controllers
             return Ok(files);
         }
 
+        [HttpGet]
+        [Route("{id}/preview")]
+        public async Task<IActionResult> PreviewFile(Guid id)
+        {
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+            if (userId == null)
+            {
+                return Unauthorized();
+            }
+
+            var (fileStream, contentType, fileName) = await _fileService.DownloadFileAsync(id, userId);
+
+            return File(fileStream, contentType, enableRangeProcessing: true);
+        }
+
         [HttpPut]
         [Route("{id}/move")]
         [Audit("File.Move", "File")]

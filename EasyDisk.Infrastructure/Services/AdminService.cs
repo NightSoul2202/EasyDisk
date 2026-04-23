@@ -63,11 +63,16 @@ namespace EasyDisk.Infrastructure.Services
             if (isCurrentlyBanned)
             {
                 await _userManager.SetLockoutEndDateAsync(user, null);
+                user.BannedAt = null;
+                user.IsStorageWiped = false;
             }
             else
             {
                 await _userManager.SetLockoutEndDateAsync(user, DateTimeOffset.UtcNow.AddYears(100));
+                user.BannedAt = DateTimeOffset.UtcNow;
             }
+
+            await _userManager.UpdateAsync(user);
         }
 
         public async Task<IEnumerable<AuditLogDto>> GetAuditLogsAsync(string? userId = null)
@@ -87,6 +92,24 @@ namespace EasyDisk.Infrastructure.Services
                 IsSuccess = l.IsSuccess,
                 Timestamp = l.Timestamp
             });
+        }
+
+        public async Task<AdminDashboardStatsDto> GetDashboardStatsAsync()
+        {
+            var users = await _userManager.Users.ToListAsync();
+
+            var totalUsers = users.Count;
+            var bannedUsers = users.Count(u => u.LockoutEnd.HasValue && u.LockoutEnd.Value > DateTimeOffset.UtcNow);
+            var totalUsed = users.Sum(u => u.UsedQuotaBytes);
+            var totalAllocated = users.Sum(u => u.MaxStorageBytes);
+
+            return new AdminDashboardStatsDto
+            {
+                TotalUsers = totalUsers,
+                BannedUsers = bannedUsers,
+                TotalUsedStorage = totalUsed,
+                TotalAllocatedStorage = totalAllocated
+            };
         }
     }
 }

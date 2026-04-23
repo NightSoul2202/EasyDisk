@@ -1,5 +1,6 @@
 using EasyDisk.API.Middlewares;
 using EasyDisk.API.Services;
+using EasyDisk.Application.Interfaces.Admin;
 using EasyDisk.Application.Interfaces.Audit;
 using EasyDisk.Application.Interfaces.Auth;
 using EasyDisk.Application.Interfaces.EmailSender;
@@ -8,6 +9,7 @@ using EasyDisk.Application.Interfaces.Payment;
 using EasyDisk.Application.Interfaces.Share;
 using EasyDisk.Application.Interfaces.Tag;
 using EasyDisk.Application.Services;
+using EasyDisk.Infrastructure.BackgroundJobs;
 using EasyDisk.Infrastructure.Data;
 using EasyDisk.Infrastructure.Identity.Entities;
 using EasyDisk.Infrastructure.Identity.Services;
@@ -66,7 +68,8 @@ namespace EasyDisk.API
             {
                 options.AddPolicy("AllowFrontend", policy =>
                 {
-                    policy.WithOrigins("http://localhost:5173")
+                    policy.WithOrigins(
+                        "http://localhost:5173")
                           .AllowAnyHeader()
                           .AllowAnyMethod()
                           .AllowCredentials();
@@ -106,6 +109,22 @@ namespace EasyDisk.API
                     IssuerSigningKey = new SymmetricSecurityKey(
                         Encoding.UTF8.GetBytes(builder.Configuration["JwtSettings:Secret"]!))
                 };
+
+                options.Events = new JwtBearerEvents
+                {
+                    OnMessageReceived = context =>
+                    {
+                        var accessToken = context.Request.Query["access_token"];
+                        var path = context.HttpContext.Request.Path;
+
+                        if (!string.IsNullOrEmpty(accessToken) &&
+                           (path.StartsWithSegments("/api/File") || path.StartsWithSegments("/api/Share")))
+                        {
+                            context.Token = accessToken;
+                        }
+                        return Task.CompletedTask;
+                    }
+                };
             });
 
             builder.Services.AddMemoryCache();
@@ -129,6 +148,8 @@ namespace EasyDisk.API
             builder.Services.AddScoped<IShareLinkService, ShareLinkService>();
             builder.Services.AddScoped<IShareLinkRepository, ShareLinkRepository>();
             builder.Services.AddScoped<ITrashService, TrashService>();
+            builder.Services.AddScoped<IAdminService, AdminService>();
+            builder.Services.AddHostedService<BannedUsersCleanupService>();
 
             builder.Services.AddHttpContextAccessor();
 

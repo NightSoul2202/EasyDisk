@@ -20,5 +20,8 @@ namespace EasyDisk.Infrastructure.Identity.Entities
         public DateTime? SubscriptionEndDate { get; set; }
 
         public DateTime? BirthDate { get; set; }
+
+        public DateTimeOffset? BannedAt { get; set; }
+        public bool IsStorageWiped { get; set; } = false;
     }
 }

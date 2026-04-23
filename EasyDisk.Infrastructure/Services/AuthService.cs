@@ -167,11 +167,19 @@ namespace EasyDisk.Infrastructure.Identity.Services
         private async Task<ApplicationUser> ValidateUserCredentialsAsync(string email, string password)
         {
             var user = await _userManager.FindByEmailAsync(email);
+
             if (user == null || !await _userManager.CheckPasswordAsync(user, password))
             {
                 await LogAuditResultAsync("User.LoginFailed", user?.Id, new { AttemptedEmail = email, Reason = "Invalid credentials" }, false);
                 throw new ValidationException("Invalid email or password.");
             }
+
+            if (await _userManager.IsLockedOutAsync(user))
+            {
+                await LogAuditResultAsync("User.LoginBlocked", user.Id, new { Email = email, Reason = "User is banned" }, false);
+                throw new ValidationException("Your account has been blocked. Please contact petakaftan@gmail.com for details.");
+            }
+
             return user;
         }
 
@@ -214,6 +222,12 @@ namespace EasyDisk.Infrastructure.Identity.Services
                     return new AuthResponseDto { RequiresTwoFactor = true, Email = user.Email };
                 }
                 await VerifyTwoFactorCodeAsync(user, code);
+            }
+
+            if (await _userManager.IsLockedOutAsync(user))
+            {
+                await LogAuditResultAsync("User.LoginBlocked", user.Id, new { Email = user.Email, Reason = "User is banned" }, false);
+                throw new ValidationException("Your account has been blocked. Please contact petakaftan@gmail.com for details. You have 2 weeks to file an appeal or your data will be lost forever.");
             }
 
             var token = await GenerateJwtTokenAsync(user);
