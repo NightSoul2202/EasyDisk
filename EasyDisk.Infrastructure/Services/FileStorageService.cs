@@ -4,24 +4,37 @@ using Microsoft.Extensions.Configuration;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.Intrinsics.Arm;
+using System.Security.Cryptography;
 using System.Text;
 using System.Threading.Tasks;
+using Aes = System.Security.Cryptography.Aes;
 
 namespace EasyDisk.Infrastructure.Services
 {
     public class FileStorageService : IFileStorageService
     {
+        private readonly string _basePath;
         private readonly string _uploadDirectory;
         private readonly string _tempDirectory;
+        private readonly byte[] _encryptionKey;
 
         public FileStorageService(IConfiguration configuration)
         {
-            var basePath = configuration["Storage:BasePath"] ?? Path.Combine(Directory.GetCurrentDirectory(), "Storage");
+            _basePath = configuration["Storage:BasePath"] ?? Path.Combine(Directory.GetCurrentDirectory(), "Storage");
             
-            _uploadDirectory = Path.Combine(basePath, "Uploads");
-            _tempDirectory = Path.Combine(basePath, "Temp");
+            _uploadDirectory = Path.Combine(_basePath, "Uploads");
+            _tempDirectory = Path.Combine(_basePath, "Temp");
 
-            if(!Directory.Exists(_uploadDirectory))
+            var keyString = configuration["Storage__EncryptionKey"] ?? throw new InvalidOperationException("Encryption key is not configured.");
+            _encryptionKey = Encoding.UTF8.GetBytes(keyString);
+
+            if (_encryptionKey.Length != 32)
+            {
+                throw new InvalidOperationException("Encryption key must be 32 bytes long for AES-256.");
+            }
+
+            if (!Directory.Exists(_uploadDirectory))
             {
                 Directory.CreateDirectory(_uploadDirectory);
             }
@@ -51,14 +64,32 @@ namespace EasyDisk.Infrastructure.Services
             var finalFileName = $"{Guid.NewGuid()}{extension}";
             var finalFilePath = Path.Combine(_uploadDirectory, finalFileName);
 
-            await Task.Run(() => File.Move(tempFilePath, finalFilePath));
+            using (Aes aes = Aes.Create())
+            {
+                aes.Key = _encryptionKey;
+                aes.GenerateIV();
+
+                using (var finalFileStream = new FileStream(finalFilePath, FileMode.Create, FileAccess.Write))
+                {
+                    await finalFileStream.WriteAsync(aes.IV, 0, aes.IV.Length);
+
+                    using (var encryptor = aes.CreateEncryptor())
+                    using (var cryptoStream = new CryptoStream(finalFileStream, encryptor, CryptoStreamMode.Write))
+                    using (var tempFileStream = new FileStream(tempFilePath, FileMode.Open, FileAccess.Read))
+                    {
+                        await tempFileStream.CopyToAsync(cryptoStream);
+                    }
+                }
+            }
+
+            File.Delete(tempFilePath);
 
             return Path.Combine("Uploads", finalFileName);
         }
 
-        public Task<Stream> GetFileStreamAsync(string physicalPath)
+        public async Task<Stream> GetFileStreamAsync(string physicalPath)
         {
-            var fullPath = Path.Combine(Directory.GetCurrentDirectory(), "Storage", physicalPath);
+            var fullPath = Path.Combine(_basePath, physicalPath);
 
             if(!File.Exists(fullPath))
             {
@@ -67,7 +98,16 @@ namespace EasyDisk.Infrastructure.Services
 
             Stream fileStream = new FileStream(fullPath, FileMode.Open, FileAccess.Read, FileShare.Read);
 
-            return Task.FromResult(fileStream);
+            byte[] iv = new byte[16];
+            await fileStream.ReadAsync(iv, 0, iv.Length);
+
+            Aes aes = Aes.Create();
+            aes.Key = _encryptionKey;
+            aes.IV = iv;
+
+            var decryptor = aes.CreateDecryptor();
+
+            return new CryptoStream(fileStream, decryptor, CryptoStreamMode.Read);
         }
 
         public Task CancelUploadAsync(string uploadId)
@@ -84,7 +124,7 @@ namespace EasyDisk.Infrastructure.Services
 
         public Task DeleteFileAsync(string physicalPath)
         {
-            var fullPath = Path.Combine(Directory.GetCurrentDirectory(), "Storage", physicalPath);
+            var fullPath = Path.Combine(_basePath, physicalPath);
 
             if (File.Exists(fullPath))
             {

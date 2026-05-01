@@ -69,7 +69,8 @@ namespace EasyDisk.API
                 options.AddPolicy("AllowFrontend", policy =>
                 {
                     policy.WithOrigins(
-                        "http://localhost:5173")
+                        "http://localhost:5173",
+                        "http://185.35.103.158:5173")
                           .AllowAnyHeader()
                           .AllowAnyMethod()
                           .AllowCredentials();
@@ -127,6 +128,11 @@ namespace EasyDisk.API
                 };
             });
 
+            builder.WebHost.ConfigureKestrel(serverOptions =>
+            {
+                serverOptions.Limits.MaxRequestBodySize = 1024 * 1024 * 1024;
+            });
+
             builder.Services.AddMemoryCache();
 
             builder.Services.AddScoped<IAuthService, AuthService>();
@@ -164,6 +170,9 @@ namespace EasyDisk.API
 
                 try
                 {
+                    var context = services.GetRequiredService<ApplicationDbContext>();
+                    await context.Database.MigrateAsync();
+
                     logger.LogInformation("Start seeding database...");
                     await DbSeeder.SeedRolesAndAdminAsync(services);
                 }
@@ -180,7 +189,7 @@ namespace EasyDisk.API
                 app.UseSwaggerUI();
             }
 
-            app.UseHttpsRedirection();
+            //app.UseHttpsRedirection();
 
             app.UseCors("AllowFrontend");
 

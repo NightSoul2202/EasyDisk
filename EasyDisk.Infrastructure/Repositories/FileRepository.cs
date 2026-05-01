@@ -124,7 +124,7 @@ namespace EasyDisk.Infrastructure.Repositories
             return await _dbContext.Files
                  .IgnoreQueryFilters()
                  .Where(f => f.OwnerId == userId && f.DeletedAt != null &&
-                            (f.FolderId == null || f.Folder.DeletedAt == null))
+                            (f.FolderId == null || f.Folder!.DeletedAt == null))
                  .ToListAsync();
         }
 
