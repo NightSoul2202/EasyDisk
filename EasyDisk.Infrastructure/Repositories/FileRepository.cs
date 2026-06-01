@@ -139,6 +139,7 @@ namespace EasyDisk.Infrastructure.Repositories
         {
             return await _dbContext.Files
                 .IgnoreQueryFilters()
+                .Include(v => v.Versions)
                 .FirstOrDefaultAsync(f => f.Id == id && f.OwnerId == userId && f.DeletedAt != null);
         }
 

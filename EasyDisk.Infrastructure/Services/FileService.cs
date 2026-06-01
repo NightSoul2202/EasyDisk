@@ -7,6 +7,7 @@ using EasyDisk.Application.Interfaces.Files;
 using EasyDisk.Application.Interfaces.Share;
 using EasyDisk.Domain.Entities;
 using EasyDisk.Infrastructure.Data;
+using EasyDisk.Infrastructure.Exceptions;
 using Microsoft.AspNetCore.StaticFiles;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Identity.Client;
@@ -89,9 +90,14 @@ namespace EasyDisk.Infrastructure.Services
 
             await _shareLinkRepository.DeleteLinksForFileAsync(fileId);
 
-            await _userRepository.UpdateUserQuotaAsync(userId, -file.Size);
+            long totalFileWeight = 0;
+            foreach (var version in file.Versions)
+            {
+                await _fileStorageService.DeleteFileAsync(version.PhysicalPath);
+                totalFileWeight += version.Size;
+            }
 
-            await _fileStorageService.DeleteFileAsync(file.PhysicalPath);
+            await _userRepository.UpdateUserQuotaAsync(userId, -totalFileWeight);
 
             _fileRepository.Delete(file);
 
@@ -143,6 +149,16 @@ namespace EasyDisk.Infrastructure.Services
         public async Task<FileResponseDto?> UploadChunkAsync(UploadChunkDto uploadChunkDto, Stream chunkStream)
         {
             var userId = _currentUserService.UserId ?? throw new ValidationException("User must be authenticated to upload file");
+
+            if (uploadChunkDto.ChunkIndex == 0)
+            {
+                var (used, max) = await _userRepository.GetUserQuotaInfoAsync(userId);
+
+                if (used + uploadChunkDto.TotalSize > max)
+                {
+                    throw new StorageOperationException("Storage quota exceeded. Please upgrade your plan.");
+                }
+            }
 
             if (uploadChunkDto.FolderId.HasValue)
             {
@@ -287,6 +303,13 @@ namespace EasyDisk.Infrastructure.Services
 
         private async Task<FileResponseDto> AppendNewVersionAsync(FileEntity existingFile, string newPhysicalPath, long newSize)
         {
+            var (used, max) = await _userRepository.GetUserQuotaInfoAsync(existingFile.OwnerId);
+            if (used + newSize > max)
+            {
+                await _fileStorageService.DeleteFileAsync(newPhysicalPath);
+                throw new StorageOperationException("Not enough space to upload a new version.");
+            }
+
             int newVersionNumber = existingFile.Versions.Any() ? existingFile.Versions.Max(v => v.VersionNumber) + 1 : 2;
 
             var newVersion = new FileVersionEntity

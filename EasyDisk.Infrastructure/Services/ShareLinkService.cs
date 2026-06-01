@@ -7,11 +7,9 @@ using EasyDisk.Application.Interfaces.Files;
 using EasyDisk.Application.Interfaces.Share;
 using EasyDisk.Domain.Entities;
 using EasyDisk.Infrastructure.Repositories;
-using Microsoft.AspNetCore.StaticFiles;
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.IO.Compression;
 using System.Linq;
 using System.Threading.Tasks;
 
@@ -23,20 +21,23 @@ namespace EasyDisk.Infrastructure.Services
         private readonly IFileRepository _fileRepository;
         private readonly IFolderRepository _folderRepository;
         private readonly ICurrentUserService _currentUserService;
-        private readonly IFileStorageService _fileStorageService;
+        private readonly IFileService _fileService;
+        private readonly IFolderService _folderService;
 
         public ShareLinkService(
             IShareLinkRepository shareLinkRepository,
             IFileRepository fileRepository,
             IFolderRepository folderRepository,
             ICurrentUserService currentUserService,
-            IFileStorageService fileStorageService)
+            IFileService fileService,
+            IFolderService folderService)
         {
             _shareLinkRepository = shareLinkRepository;
             _fileRepository = fileRepository;
             _folderRepository = folderRepository;
             _currentUserService = currentUserService;
-            _fileStorageService = fileStorageService;
+            _fileService = fileService;
+            _folderService = folderService;
         }
 
         public async Task<ShareLinkResponseDto> CreateShareLinkAsync(CreateShareLinkDto dto)
@@ -52,23 +53,33 @@ namespace EasyDisk.Infrastructure.Services
         public async Task<(Stream FileStream, string ContentType, string FileName)> DownloadSharedFileAsync(string token, string? password = null)
         {
             var shareLink = await GetValidatedShareLinkAsync(token, password, requireFile: true);
-            return await GetStreamAndContentTypeAsync(shareLink.File!);
+
+            shareLink.DownloadCount++;
+            await _shareLinkRepository.SaveChangesAsync();
+
+            return await _fileService.DownloadFileAsync(shareLink.FileId!.Value, shareLink.OwnerId);
         }
 
         public async Task<string> PrepareSharedFolderZipAsync(string token, string? password = null)
         {
             var shareLink = await GetValidatedShareLinkAsync(token, password, requireFolder: true);
 
-            return await GenerateTempZipAsync(shareLink);
+            shareLink.DownloadCount++;
+            await _shareLinkRepository.SaveChangesAsync();
+
+            return await _folderService.PrepareZipTaskAsync(shareLink.FolderId!.Value, shareLink.OwnerId);
         }
 
         public async Task<(Stream FileStream, string ContentType, string FileName)> DownloadSharedItemAsync(string token, Guid fileId, string? password = null, int? targetFolderId = null)
         {
             var shareLink = await GetValidatedShareLinkAsync(token, password, requireFolder: true);
 
-            var file = await ValidateAndGetFolderItemAsync(shareLink, fileId, targetFolderId);
+            await ValidateFolderItemAccessAsync(shareLink, fileId, targetFolderId);
 
-            return await GetStreamAndContentTypeAsync(file);
+            shareLink.DownloadCount++;
+            await _shareLinkRepository.SaveChangesAsync();
+
+            return await _fileService.DownloadFileAsync(fileId, shareLink.OwnerId);
         }
 
         public async Task<IEnumerable<SharedItemDto>> GetSharedFolderContentAsync(string token, string? password = null, int? folderId = null)
@@ -85,7 +96,6 @@ namespace EasyDisk.Infrastructure.Services
             return MapToInfoDto(shareLink);
         }
 
-
         private string GetCurrentUserId()
         {
             return _currentUserService.UserId ?? throw new ValidationException("User must be authenticated.");
@@ -97,7 +107,7 @@ namespace EasyDisk.Infrastructure.Services
             {
                 throw new ValidationException("You must provide either a FileId or a FolderId.");
             }
-                
+
             if (dto.FileId != null && dto.FolderId != null)
             {
                 throw new ValidationException("Cannot share both a file and a folder in a single link.");
@@ -132,7 +142,7 @@ namespace EasyDisk.Infrastructure.Services
             {
                 _ = await _fileRepository.GetByIdAsync(link.FileId.Value, userId) ?? throw new NotFoundException("File", link.FileId.Value);
             }
-                
+
             if (link.FolderId.HasValue)
             {
                 _ = await _folderRepository.GetByIdAsync(link.FolderId.Value, userId) ?? throw new NotFoundException("Folder", link.FolderId.Value);
@@ -169,51 +179,19 @@ namespace EasyDisk.Infrastructure.Services
             {
                 throw new NotFoundException("Share link not found or expired.");
             }
-                
+
             return link;
         }
 
-        private async Task<string> GenerateTempZipAsync(ShareLinkEntity shareLink)
-        {
-            string tempPath = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid()}.zip");
-
-            using (var fs = new FileStream(tempPath, FileMode.Create))
-            using (var archive = new ZipArchive(fs, ZipArchiveMode.Create))
-            {
-                await AddFolderToArchiveAsync(archive, shareLink.FolderId!.Value, shareLink.OwnerId, "");
-            }
-
-            shareLink.DownloadCount++;
-            await _shareLinkRepository.SaveChangesAsync();
-
-            return Path.GetFileName(tempPath);
-        }
-
-        private async Task<FileEntity> ValidateAndGetFolderItemAsync(ShareLinkEntity shareLink, Guid fileId, int? targetFolderId)
+        private async Task ValidateFolderItemAccessAsync(ShareLinkEntity shareLink, Guid fileId, int? targetFolderId)
         {
             var actualFolderId = targetFolderId ?? shareLink.FolderId!.Value;
             var filesInFolder = await _fileRepository.GetByFolderIdAsync(actualFolderId, shareLink.OwnerId);
 
-            var file = filesInFolder.FirstOrDefault(f => f.Id == fileId)
-                ?? throw new ValidationException("File not found in the shared folder or access denied.");
-
-            shareLink.DownloadCount++;
-            await _shareLinkRepository.SaveChangesAsync();
-
-            return file;
-        }
-
-        private async Task<(Stream, string, string)> GetStreamAndContentTypeAsync(FileEntity file)
-        {
-            var stream = await _fileStorageService.GetFileStreamAsync(file.PhysicalPath);
-            var provider = new FileExtensionContentTypeProvider();
-
-            if (!provider.TryGetContentType(file.Name, out var contentType))
+            if (!filesInFolder.Any(f => f.Id == fileId))
             {
-                contentType = "application/octet-stream";
+                throw new ValidationException("File not found in the shared folder or access denied.");
             }
-
-            return (stream, contentType, file.Name);
         }
 
         private async Task<IEnumerable<SharedItemDto>> FetchAndMapFolderContentAsync(ShareLinkEntity shareLink, int? folderId)
@@ -224,27 +202,27 @@ namespace EasyDisk.Infrastructure.Services
             {
                 _ = await _folderRepository.GetByIdAsync(folderId.Value, shareLink.OwnerId).EnsureExistsAsync(() => "Folder not found");
             }
-                
+
             var folders = await _folderRepository.GetByParentIdAsync(actualFolderId, shareLink.OwnerId);
             var files = await _fileRepository.GetByFolderIdAsync(actualFolderId, shareLink.OwnerId);
 
-            var items = folders.Select(f => new SharedItemDto 
-            { 
-                Id = $"folder_{f.Id}", 
-                OriginalId = f.Id.ToString(), 
-                Name = f.Name, 
-                IsFolder = true, 
-                Size = 0, 
-                CreatedAt = f.CreatedAt 
-            })
-            .Concat(files.Select(f => new SharedItemDto 
-            { 
-                Id = $"file_{f.Id}", 
+            var items = folders.Select(f => new SharedItemDto
+            {
+                Id = $"folder_{f.Id}",
                 OriginalId = f.Id.ToString(),
                 Name = f.Name,
-                IsFolder = false, 
-                Size = f.Size, 
-                CreatedAt = f.CreatedAt 
+                IsFolder = true,
+                Size = 0,
+                CreatedAt = f.CreatedAt
+            })
+            .Concat(files.Select(f => new SharedItemDto
+            {
+                Id = $"file_{f.Id}",
+                OriginalId = f.Id.ToString(),
+                Name = f.Name,
+                IsFolder = false,
+                Size = f.Size,
+                CreatedAt = f.CreatedAt
             }));
 
             return items.OrderByDescending(x => x.IsFolder).ThenBy(x => x.Name);
@@ -269,26 +247,6 @@ namespace EasyDisk.Infrastructure.Services
                 IsPasswordProtected = !string.IsNullOrEmpty(link.PasswordHash),
                 ExpirationDate = link.ExpirationDate
             };
-        }
-
-        private async Task AddFolderToArchiveAsync(ZipArchive archive, int folderId, string ownerId, string currentPath)
-        {
-            var files = await _fileRepository.GetByFolderIdAsync(folderId, ownerId);
-            foreach (var file in files)
-            {
-                var entry = archive.CreateEntry(Path.Combine(currentPath, file.Name), CompressionLevel.Optimal);
-                using var entryStream = entry.Open();
-                using var fileStream = await _fileStorageService.GetFileStreamAsync(file.PhysicalPath);
-                await fileStream.CopyToAsync(entryStream);
-            }
-
-            var subFolders = await _folderRepository.GetByParentIdAsync(folderId, ownerId);
-            foreach (var subFolder in subFolders)
-            {
-                var newPath = Path.Combine(currentPath, subFolder.Name);
-                archive.CreateEntry(newPath + "/");
-                await AddFolderToArchiveAsync(archive, subFolder.Id, ownerId, newPath);
-            }
         }
     }
 }

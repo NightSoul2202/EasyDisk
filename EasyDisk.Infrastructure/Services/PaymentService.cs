@@ -10,6 +10,7 @@ using Stripe;
 using Stripe.Checkout;
 using Stripe.V2.Core;
 using System;
+using System.Text.Json;
 using System.Threading.Tasks;
 
 namespace EasyDisk.Infrastructure.Services
@@ -38,8 +39,8 @@ namespace EasyDisk.Infrastructure.Services
                 case "checkout.session.completed":
                     await HandleCheckoutSessionCompleted(stripeEvent.Data.Object as Session);
                     break;
-                case "invoice.paid":
-                    await HandleInvoicePaid(stripeEvent.Data.Object as Invoice);
+                case "customer.subscription.updated":
+                    await HandleSubscriptionUpdated(stripeEvent.Data.Object as Subscription);
                     break;
                 case "customer.subscription.deleted":
                     await HandleSubscriptionDeleted(stripeEvent.Data.Object as Subscription);
@@ -69,11 +70,13 @@ namespace EasyDisk.Infrastructure.Services
 
                 await _userManager.UpdateAsync(user);
 
+                string auditDetails = JsonSerializer.Serialize(new { Reason = "Stripe webhook: subscription deleted", PreviousPlan = previousPlan });
+
                 await _auditService.LogAsync(
                     action: "Subscription.DowngradedToFree",
                     entityType: "Subscription",
                     entityId: user.Id,
-                    details: new { Reason = "Stripe webhook: subscription deleted", PreviousPlan = previousPlan },
+                    details: auditDetails,
                     isSuccess: true
                 );
 
@@ -81,28 +84,30 @@ namespace EasyDisk.Infrastructure.Services
             }
         }
 
-        private async Task HandleInvoicePaid(Invoice? invoice)
+        private async Task HandleSubscriptionUpdated(Subscription? subscription)
         {
-            if (invoice == null)
-            {
-                return;
-            }
+            if (subscription == null) return;
 
-            var user = await _userManager.Users.FirstOrDefaultAsync(u => u.StripeCustomerId == invoice.CustomerId);
+            var user = await _userManager.Users.FirstOrDefaultAsync(u => u.StripeCustomerId == subscription.CustomerId);
             if (user != null)
             {
-                user.SubscriptionEndDate = DateTime.UtcNow.AddMonths(1);
+                var priceId = subscription.Items.Data[0].Price.Id;
+
+                var newPlan = MapPriceIdToPlanName(priceId);
+
+                user.SubscriptionPlan = newPlan;
+                user.MaxStorageBytes = SubscriptionPlans.GetBytesForPlan(newPlan);
                 await _userManager.UpdateAsync(user);
 
+                string auditDetails = JsonSerializer.Serialize(new { NewPlan = newPlan });
+
                 await _auditService.LogAsync(
-                    action: "Subscription.Renewed",
+                    action: "Subscription.Updated",
                     entityType: "Subscription",
                     entityId: user.Id,
-                    details: new { Plan = user.SubscriptionPlan, NewEndDate = user.SubscriptionEndDate },
+                    details: auditDetails,
                     isSuccess: true
                 );
-
-                _logger.LogInformation("Extended subscription for user {Email} due to invoice payment", user.Email);
             }
         }
 
@@ -129,16 +134,29 @@ namespace EasyDisk.Infrastructure.Services
 
                 await _userManager.UpdateAsync(user);
 
+                string auditDetails = JsonSerializer.Serialize(new { NewPlan = planName, PreviousPlan = previousPlan, StripeSessionId = session.Id });
+
                 await _auditService.LogAsync(
                     action: "Subscription.Purchased",
                     entityType: "Subscription",
                     entityId: user.Id,
-                    details: new { NewPlan = planName, PreviousPlan = previousPlan, StripeSessionId = session.Id },
+                    details: auditDetails,
                     isSuccess: true
                 );
 
                 _logger.LogInformation("Updated subscription for user {Email} to plan {PlanName}", user.Email, planName);
             }
+        }
+
+        private string MapPriceIdToPlanName(string priceId)
+        {
+            return priceId switch
+            {
+                "price_1TMRmf84ij9ViWU87Adwbxej" => SubscriptionPlans.Basic,
+                "price_1TMRsT84ij9ViWU8nyFud3H1" => SubscriptionPlans.Pro,
+                "price_1TMRtG84ij9ViWU8R4R5n2WW" => SubscriptionPlans.Premium,
+                _ => SubscriptionPlans.Free
+            };
         }
     }
 }

@@ -16,5 +16,6 @@ namespace EasyDisk.Application.DTOs
         public bool TwoFactorEnabled { get; set; }
         public long UsedQuotaBytes { get; set; }
         public long MaxStorageBytes { get; set; }
+        public bool HasPassword { get; set; }
     }
 }

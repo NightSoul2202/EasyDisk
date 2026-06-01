@@ -25,11 +25,13 @@ namespace EasyDisk.Infrastructure.Services
         {
             var user = await _userManager.FindByIdAsync(userId) ?? throw new NotFoundException("User", userId);
 
-            var result = await _userManager.ChangePasswordAsync(user, dto.CurrentPassword, dto.NewPassword);
+            var result = dto.CurrentPassword == null 
+                ? await _userManager.AddPasswordAsync(user, dto.NewPassword) 
+                : await _userManager.ChangePasswordAsync(user, dto.CurrentPassword, dto.NewPassword);
 
             if (!result.Succeeded)
             {
-                var error = result.Errors.FirstOrDefault()?.Description ?? "Помилка зміни пароля.";
+                var error = result.Errors.FirstOrDefault()?.Description ?? "Error to change password.";
                 throw new ValidationException(error);
             }
         }
@@ -73,7 +75,8 @@ namespace EasyDisk.Infrastructure.Services
                 BirthDate = user.BirthDate,
                 TwoFactorEnabled = user.TwoFactorEnabled,
                 UsedQuotaBytes = user.UsedQuotaBytes,
-                MaxStorageBytes = user.MaxStorageBytes
+                MaxStorageBytes = user.MaxStorageBytes,
+                HasPassword = await _userManager.HasPasswordAsync(user)
             };
         }
     }

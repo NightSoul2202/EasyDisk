@@ -7,11 +7,9 @@ using System.Threading.Tasks;
 
 namespace EasyDisk.Application.Interfaces.Admin
 {
-    public interface IAdminService
+    public interface IAdminUserService
     {
         Task<IEnumerable<UserDetailDto>> GetAllUsersAsync();
         Task ToggleUserBanAsync(string userId);
-        Task<IEnumerable<AuditLogDto>> GetAuditLogsAsync(string? userId = null);
-        Task<AdminDashboardStatsDto> GetDashboardStatsAsync();
     }
 }

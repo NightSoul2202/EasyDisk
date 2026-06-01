@@ -25,6 +25,16 @@ namespace EasyDisk.Infrastructure.Repositories
                 .ExecuteUpdateAsync(u => u.SetProperty(x => x.UsedQuotaBytes, x => x.UsedQuotaBytes + sizeChange));
         }
 
+        public async Task<(long UsedBytes, long MaxBytes)> GetUserQuotaInfoAsync(string userId)
+        {
+            var user = await _dbContext.Users
+                .Where(u => u.Id == userId)
+                .Select(u => new { u.UsedQuotaBytes, u.MaxStorageBytes })
+                .FirstOrDefaultAsync();
+
+            return (user?.UsedQuotaBytes ?? 0, user?.MaxStorageBytes ?? 0);
+        }
+
         public async Task SaveChangesAsync()
         {
             await _dbContext.SaveChangesAsync();

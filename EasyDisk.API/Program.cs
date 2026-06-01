@@ -16,6 +16,8 @@ using EasyDisk.Infrastructure.Identity.Services;
 using EasyDisk.Infrastructure.Repositories;
 using EasyDisk.Infrastructure.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -32,7 +34,6 @@ namespace EasyDisk.API
         {
             var builder = WebApplication.CreateBuilder(args);
 
-            // Add services to the container.
             builder.Services.AddControllers();
             builder.Services.AddEndpointsApiExplorer();
             builder.Services.AddSwaggerGen(c =>
@@ -70,7 +71,7 @@ namespace EasyDisk.API
                 {
                     policy.WithOrigins(
                         "http://localhost:5173",
-                        "http://185.35.103.158:5173")
+                        "https://easydisk.ddns.net")
                           .AllowAnyHeader()
                           .AllowAnyMethod()
                           .AllowCredentials();
@@ -154,12 +155,24 @@ namespace EasyDisk.API
             builder.Services.AddScoped<IShareLinkService, ShareLinkService>();
             builder.Services.AddScoped<IShareLinkRepository, ShareLinkRepository>();
             builder.Services.AddScoped<ITrashService, TrashService>();
-            builder.Services.AddScoped<IAdminService, AdminService>();
+            builder.Services.AddScoped<IAdminUserService, AdminUserService>();
+            builder.Services.AddScoped<IAdminAuditService, AdminAuditService>();
+            builder.Services.AddScoped<IAdminStatsService, AdminStatsService>();
             builder.Services.AddHostedService<BannedUsersCleanupService>();
 
             builder.Services.AddHttpContextAccessor();
 
             var app = builder.Build();
+
+            var forwardedHeadersOptions = new ForwardedHeadersOptions
+            {
+                ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto
+            };
+
+            forwardedHeadersOptions.KnownNetworks.Clear();
+            forwardedHeadersOptions.KnownProxies.Clear();
+
+            app.UseForwardedHeaders(forwardedHeadersOptions);
 
             Stripe.StripeConfiguration.ApiKey = builder.Configuration["Stripe:SecretKey"];
 

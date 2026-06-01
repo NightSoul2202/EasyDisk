@@ -266,12 +266,33 @@ namespace EasyDisk.Infrastructure.Identity.Services
         {
             var resetToken = await _userManager.GeneratePasswordResetTokenAsync(user);
             var encodedToken = System.Uri.EscapeDataString(resetToken);
-            var resetLink = $"http://localhost:5173/reset-password?email={user.Email}&token={encodedToken}";
+            var resetLink = $"https://easydisk.ddns.net/reset-password?email={user.Email}&token={encodedToken}";
 
             var emailBody = $@"
-                <h2>Password Recovery - EasyDisk</h2>
-                <p>To set a new password, click on the button below:</p>
-                <a href='{resetLink}' style='padding: 10px 20px; background-color: #dc3545; color: white; border-radius: 5px; display: inline-block;'>Reset password</a>";
+                <div style='font-family: -apple-system, BlinkMacSystemFont, ""Segoe UI"", Roboto, Helvetica, Arial, sans-serif; background-color: #f4f4f5; padding: 40px 20px; color: #09090b;'>
+                    <div style='max-width: 600px; margin: 0 auto; background-color: #ffffff; border: 1px solid #e4e4e7; border-radius: 8px; padding: 32px; box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);'>
+                        <h2 style='margin-top: 0; font-size: 24px; font-weight: 600; color: #09090b;'>Password Recovery</h2>
+                        <p style='font-size: 16px; line-height: 24px; color: #3f3f46; margin-bottom: 24px;'>
+                            We received a request to reset the password for your EasyDisk account. If you made this request, please click the button below to set a new password:
+                        </p>
+                        <a href='{resetLink}' style='display: inline-block; padding: 10px 16px; background-color: #09090b; color: #ffffff; text-decoration: none; font-size: 14px; font-weight: 500; border-radius: 6px; text-align: center;'>
+                            Reset Password
+                        </a>
+                
+                        <p style='font-size: 14px; line-height: 20px; color: #71717a; margin-top: 24px;'>
+                            If you didn't request a password reset, you can safely ignore this email.
+                        </p>
+
+                        <hr style='border: 0; border-top: 1px solid #e4e4e7; margin: 32px 0;' />
+                
+                        <p style='font-size: 14px; line-height: 20px; color: #71717a; margin-bottom: 8px;'>
+                            If the button doesn't work, copy and paste this link into your browser:
+                        </p>
+                        <a href='{resetLink}' style='font-size: 14px; color: #2563eb; word-break: break-all;'>
+                            {resetLink}
+                        </a>
+                    </div>
+                </div>";
 
             await _emailSenderService.SendEmailAsync(user.Email!, "Password reset - EasyDisk", emailBody);
         }
@@ -352,14 +373,29 @@ namespace EasyDisk.Infrastructure.Identity.Services
             var emailToken = await _userManager.GenerateEmailConfirmationTokenAsync(user);
 
             var encodedToken = System.Uri.EscapeDataString(emailToken);
-            var confirmationLink = $"http://localhost:5173/confirm-email?userId={user.Id}&token={encodedToken}";
+            var confirmationLink = $"https://easydisk.ddns.net/confirm-email?userId={user.Id}&token={encodedToken}";
 
             var emailBody = $@"
-                <h2>Welcome to EasyDisk!</h2>
-                <p>To complete registration and activate your cloud storage, please confirm your email address by following the link below:</p>
-                <a href='{confirmationLink}' style='padding: 10px 20px; background-color: #007bff; color: white; text-decoration: none; border-radius: 5px; display: inline-block;'>Confirm Email</a>
-                <p>If the button doesn't work, copy this link into your browser: {confirmationLink}</p>
-            ";
+                <div style='font-family: -apple-system, BlinkMacSystemFont, ""Segoe UI"", Roboto, Helvetica, Arial, sans-serif; background-color: #f4f4f5; padding: 40px 20px; color: #09090b;'>
+                    <div style='max-width: 600px; margin: 0 auto; background-color: #ffffff; border: 1px solid #e4e4e7; border-radius: 8px; padding: 32px; box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);'>
+                        <h2 style='margin-top: 0; font-size: 24px; font-weight: 600; color: #09090b;'>Welcome to EasyDisk!</h2>
+                        <p style='font-size: 16px; line-height: 24px; color: #3f3f46; margin-bottom: 24px;'>
+                            To complete your registration and activate your cloud storage, please confirm your email address by clicking the button below:
+                        </p>
+                        <a href='{confirmationLink}' style='display: inline-block; padding: 10px 16px; background-color: #09090b; color: #ffffff; text-decoration: none; font-size: 14px; font-weight: 500; border-radius: 6px; text-align: center;'>
+                            Confirm Email Address
+                        </a>
+                
+                        <hr style='border: 0; border-top: 1px solid #e4e4e7; margin: 32px 0;' />
+                
+                        <p style='font-size: 14px; line-height: 20px; color: #71717a; margin-bottom: 8px;'>
+                            If the button doesn't work, copy and paste this link into your browser:
+                        </p>
+                        <a href='{confirmationLink}' style='font-size: 14px; color: #2563eb; word-break: break-all;'>
+                            {confirmationLink}
+                        </a>
+                    </div>
+                </div>";
 
             await _emailSenderService.SendEmailAsync(user.Email!, "Registation confirmation - EasyDisk", emailBody);
         }

@@ -34,6 +34,7 @@ namespace EasyDisk.API.Middlewares
                 response.StatusCode = error switch
                 {
                     ValidationException => (int)HttpStatusCode.BadRequest,
+                    StorageOperationException => (int)HttpStatusCode.BadRequest,
                     InvalidJwtException => (int)HttpStatusCode.BadRequest,
                     StripeException => (int)HttpStatusCode.BadRequest,
                     NotFoundException => (int)HttpStatusCode.NotFound,

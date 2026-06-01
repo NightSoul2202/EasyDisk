@@ -9,8 +9,7 @@ namespace EasyDisk.Application.DTOs.Auth
 {
     public class ChangePasswordDto
     {
-        [Required]
-        public string CurrentPassword { get; set; } = null!;
+        public string? CurrentPassword { get; set; } = null;
 
         [Required]
         [StringLength(100, MinimumLength = 8)]

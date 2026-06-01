@@ -68,13 +68,19 @@ namespace EasyDisk.Infrastructure.Services
 
             if (isFolder)
             {
-                if (!int.TryParse(id, out int folderId)) throw new ValidationException("Invalid folder ID");
+                if (!int.TryParse(id, out int folderId))
+                {
+                    throw new ValidationException("Invalid folder ID");
+                }
 
                 await _folderService.RestoreFolderAsync(folderId);
             }
             else
             {
-                if (!Guid.TryParse(id, out Guid fileId)) throw new ValidationException("Invalid file ID");
+                if (!Guid.TryParse(id, out Guid fileId))
+                {
+                    throw new ValidationException("Invalid file ID");
+                }
 
                 var file = await _fileRepository.GetDeletedFileByIdAsync(fileId, userId)
                     ?? throw new NotFoundException("File in trash", fileId);

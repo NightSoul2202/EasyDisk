@@ -1,5 +1,6 @@
 ﻿using EasyDisk.Application.Interfaces.Files;
 using EasyDisk.Infrastructure.Exceptions;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Configuration;
 using System;
 using System.Collections.Generic;
@@ -19,15 +20,20 @@ namespace EasyDisk.Infrastructure.Services
         private readonly string _tempDirectory;
         private readonly byte[] _encryptionKey;
 
-        public FileStorageService(IConfiguration configuration)
+        private readonly IMemoryCache _cache;
+        private const string CancelledPrefix = "cancel_";
+
+        public FileStorageService(IConfiguration configuration, IMemoryCache cache)
         {
             _basePath = configuration["Storage:BasePath"] ?? Path.Combine(Directory.GetCurrentDirectory(), "Storage");
             
             _uploadDirectory = Path.Combine(_basePath, "Uploads");
             _tempDirectory = Path.Combine(_basePath, "Temp");
 
-            var keyString = configuration["Storage__EncryptionKey"] ?? throw new InvalidOperationException("Encryption key is not configured.");
+            var keyString = configuration["Storage:EncryptionKey"] ?? throw new InvalidOperationException("Encryption key is not configured.");
             _encryptionKey = Encoding.UTF8.GetBytes(keyString);
+
+            _cache = cache;
 
             if (_encryptionKey.Length != 32)
             {
@@ -46,6 +52,11 @@ namespace EasyDisk.Infrastructure.Services
 
         public async Task AppendChunkAsync(string uploadId, Stream chunkStream)
         {
+            if (_cache.TryGetValue(CancelledPrefix + uploadId, out _))
+            {
+                return;
+            }
+
             var tempFilePath = Path.Combine(_tempDirectory, $"{uploadId}.tmp");
 
             using var fileStream = new FileStream(tempFilePath, FileMode.Append, FileAccess.Write, FileShare.None);
@@ -112,6 +123,8 @@ namespace EasyDisk.Infrastructure.Services
 
         public Task CancelUploadAsync(string uploadId)
         {
+            _cache.Set(CancelledPrefix + uploadId, true, TimeSpan.FromSeconds(5));
+
             var tempFilePath = Path.Combine(_tempDirectory, $"{uploadId}.tmp");
 
             if (File.Exists(tempFilePath))

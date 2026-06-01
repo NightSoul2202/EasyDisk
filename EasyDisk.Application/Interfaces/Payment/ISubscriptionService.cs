@@ -9,6 +9,7 @@ namespace EasyDisk.Application.Interfaces.Payment
     public interface ISubscriptionService
     {
         Task<string> CreateCheckoutSessionAsync(string userId, string planName);
+        Task<string> CreateCustomerPortalSessionAsync(string stripeCustomerId);
         Task CancelSubscriptionAsync(string userId);
     }
 }
